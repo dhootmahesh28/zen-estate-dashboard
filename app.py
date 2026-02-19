@@ -77,20 +77,30 @@ def load_excel_data(file):
                         'Difference': float(diff_val) if pd.notna(diff_val) else 0
                     })
         
-        # Get vendor data for December only (rows 55-67)
+        # Get vendor data for ALL months (Sep, Oct, Nov, Dec)
         vendor_data = []
-        dec_vendor_start = 55  # First vendor row
-        dec_vendor_end = 68    # End before "Jan 2026" header
         
-        for idx in range(dec_vendor_start, dec_vendor_end):
-            if idx < len(df):
+        # Define vendor sections for each month
+        vendor_sections = [
+            {'month': 'Sep', 'start': 3, 'end': 20},     # Sep vendor rows
+            {'month': 'Oct', 'start': 22, 'end': 36},    # Oct vendor rows  
+            {'month': 'Nov', 'start': 38, 'end': 52},    # Nov vendor rows
+            {'month': 'Dec', 'start': 55, 'end': 68}     # Dec vendor rows
+        ]
+        
+        for section in vendor_sections:
+            for idx in range(section['start'], min(section['end'], len(df))):
                 vendor = df.iloc[idx, 2]
                 amount = df.iloc[idx, 3]
                 if pd.notna(vendor) and pd.notna(amount) and isinstance(amount, (int, float)) and amount > 0:
-                    vendor_data.append({
-                        'Vendor': str(vendor),
-                        'Amount': float(amount)
-                    })
+                    # Check if vendor name is not a header
+                    vendor_str = str(vendor)
+                    if 'Vendor Name' not in vendor_str and 'Vendor Bills' not in vendor_str:
+                        vendor_data.append({
+                            'Vendor': vendor_str,
+                            'Amount': float(amount),
+                            'Month': section['month']
+                        })
         
         df_monthly = pd.DataFrame(monthly_data)
         df_wings = pd.DataFrame(wing_data)
@@ -103,31 +113,32 @@ def load_excel_data(file):
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 def create_vendor_breakdown(df_vendors):
-    """Vendor Expense Breakdown with color gradient"""
+    """Vendor Expense Breakdown with color gradient - ALL MONTHS"""
     if df_vendors.empty:
         return None
     
-    # Sort and take top vendors
-    df_sorted = df_vendors.sort_values('Amount', ascending=False).head(15)
+    # Aggregate by vendor across all months
+    vendor_totals = df_vendors.groupby('Vendor')['Amount'].sum().reset_index()
+    vendor_totals = vendor_totals.sort_values('Amount', ascending=False).head(15)
     
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
-        x=df_sorted['Vendor'],
-        y=df_sorted['Amount'],
+        x=vendor_totals['Vendor'],
+        y=vendor_totals['Amount'],
         marker=dict(
-            color=df_sorted['Amount'],
+            color=vendor_totals['Amount'],
             colorscale='Viridis',
             showscale=True,
             colorbar=dict(title="Amount Paid")
         ),
-        text=[f'₹{v:,.2f}' for v in df_sorted['Amount']],
+        text=[f'₹{v:,.2f}' for v in vendor_totals['Amount']],
         textposition='outside',
         hovertemplate='<b>%{x}</b><br>Amount: ₹%{y:,.2f}<extra></extra>'
     ))
     
     fig.update_layout(
-        title='Vendor Expense Breakdown (Dec 2025) — Sorted High→Low',
+        title='Vendor Expense Breakdown (Sep-Dec 2025) — Sorted High→Low',
         xaxis_title='Vendor',
         yaxis_title='Amount (INR)',
         height=500,
@@ -206,13 +217,13 @@ def create_wing_difference_chart(df_wings):
     # Aggregate total difference per wing across all months
     wing_totals = df_wings.groupby('Wing')['Difference'].sum().reset_index()
     
-    # Create color array: Excess (positive) = GREEN, Pending (negative) = RED
+    # Create color array: Positive = RED (pending), Negative = GREEN (excess/overpaid)
     colors = []
     for diff in wing_totals['Difference']:
         if diff > 0:
-            colors.append('#2ca02c')  # Green for excess
+            colors.append('#d62728')  # Red for pending (positive means money owed)
         elif diff < 0:
-            colors.append('#d62728')  # Red for pending
+            colors.append('#2ca02c')  # Green for excess (negative means overpaid)
         else:
             colors.append('#9e9e9e')  # Gray
     
