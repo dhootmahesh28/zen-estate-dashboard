@@ -205,7 +205,7 @@ def create_combined_monthly_chart(df_monthly):
         yaxis_title='Amount (INR)',
         height=520,
         yaxis=dict(tickprefix='₹', tickformat=',.0f')
-    ))
+    )
     
     return fig
 
