@@ -224,7 +224,11 @@ def create_wing_difference_chart(df_wings):
     # Aggregate total difference per wing across all months
     wing_totals = df_wings.groupby('Wing')['Difference'].sum().reset_index()
     
-    # Create color array: Positive = RED (pending), Negative = GREEN (excess/overpaid)
+    # Flip the values for display (multiply by -1)
+    # So pending (positive) shows below, excess (negative) shows above
+    wing_totals['Display_Value'] = wing_totals['Difference'] * -1
+    
+    # Create color array: Positive original = RED (pending), Negative original = GREEN (excess)
     colors = []
     for diff in wing_totals['Difference']:
         if diff > 0:
@@ -238,11 +242,12 @@ def create_wing_difference_chart(df_wings):
     
     fig.add_trace(go.Bar(
         x=wing_totals['Wing'],
-        y=wing_totals['Difference'],
+        y=wing_totals['Display_Value'],  # Use flipped values
         marker_color=colors,
-        text=[f'₹{v:,.2f}' for v in wing_totals['Difference']],
+        text=[f'₹{v:,.2f}' for v in wing_totals['Difference']],  # Show original values in labels
         textposition='outside',
-        hovertemplate='<b>%{x}</b><br>Difference: ₹%{y:,.2f}<extra></extra>'
+        hovertemplate='<b>%{x}</b><br>Difference: ₹%{text}<extra></extra>',
+        customdata=wing_totals['Difference']
     ))
     
     fig.update_layout(
