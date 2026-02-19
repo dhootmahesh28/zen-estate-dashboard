@@ -37,7 +37,8 @@ def load_excel_data(file):
             {'name': 'Sep', 'to_be_row': 9, 'received_row': 8, 'diff_row': 10, 'summary_row': 14, 'expense_col': 15},
             {'name': 'Oct', 'to_be_row': 29, 'received_row': 28, 'diff_row': 30, 'summary_row': 34, 'expense_col': 15},
             {'name': 'Nov', 'to_be_row': 45, 'received_row': 44, 'diff_row': 46, 'summary_row': 50, 'expense_col': 15},
-            {'name': 'Dec', 'to_be_row': 62, 'received_row': 61, 'diff_row': 63, 'summary_row': 67, 'expense_col': 15}
+            {'name': 'Dec', 'to_be_row': 62, 'received_row': 61, 'diff_row': 63, 'summary_row': 67, 'expense_col': 15},
+            {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -77,7 +78,7 @@ def load_excel_data(file):
                         'Difference': float(diff_val) if pd.notna(diff_val) else 0
                     })
         
-        # Get vendor data for ALL months (Sep, Oct, Nov, Dec)
+        # Get vendor data for ALL months (Sep, Oct, Nov, Dec, Jan)
         vendor_data = []
         
         # Define vendor sections for each month
@@ -85,7 +86,8 @@ def load_excel_data(file):
             {'month': 'Sep', 'start': 3, 'end': 20},     # Sep vendor rows
             {'month': 'Oct', 'start': 22, 'end': 36},    # Oct vendor rows  
             {'month': 'Nov', 'start': 38, 'end': 52},    # Nov vendor rows
-            {'month': 'Dec', 'start': 55, 'end': 68}     # Dec vendor rows
+            {'month': 'Dec', 'start': 55, 'end': 68},    # Dec vendor rows
+            {'month': 'Jan', 'start': 70, 'end': 85}     # Jan vendor rows
         ]
         
         for section in vendor_sections:
@@ -256,7 +258,7 @@ def create_wing_difference_chart(df_wings):
     return fig
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep–Dec 2025)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Jan 2026)</h1>', unsafe_allow_html=True)
     
     with st.sidebar:
         st.header("📁 Upload Data")
@@ -294,7 +296,7 @@ def main():
             
             st.markdown("---")
             
-            # Vendor Breakdown - 4 separate charts for each month
+            # Vendor Breakdown - 5 separate charts for each month
             if not df_vendors.empty:
                 st.markdown("### 💼 Vendor Expense Breakdown (Month-wise)")
                 
@@ -317,6 +319,11 @@ def main():
                 fig_dec = create_vendor_breakdown(df_vendors, 'Dec')
                 if fig_dec:
                     st.plotly_chart(fig_dec, use_container_width=True)
+                
+                # January
+                fig_jan = create_vendor_breakdown(df_vendors, 'Jan')
+                if fig_jan:
+                    st.plotly_chart(fig_jan, use_container_width=True)
             
             # Extra Income
             st.markdown("### 💰 Extra Income (Month-wise)")
