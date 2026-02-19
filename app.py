@@ -112,33 +112,38 @@ def load_excel_data(file):
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-def create_vendor_breakdown(df_vendors):
-    """Vendor Expense Breakdown with color gradient - ALL MONTHS"""
+def create_vendor_breakdown(df_vendors, month):
+    """Vendor Expense Breakdown with color gradient for a specific month"""
     if df_vendors.empty:
         return None
     
-    # Aggregate by vendor across all months
-    vendor_totals = df_vendors.groupby('Vendor')['Amount'].sum().reset_index()
-    vendor_totals = vendor_totals.sort_values('Amount', ascending=False).head(15)
+    # Filter by month
+    month_vendors = df_vendors[df_vendors['Month'] == month].copy()
+    
+    if month_vendors.empty:
+        return None
+    
+    # Sort by amount
+    month_vendors = month_vendors.sort_values('Amount', ascending=False)
     
     fig = go.Figure()
     
     fig.add_trace(go.Bar(
-        x=vendor_totals['Vendor'],
-        y=vendor_totals['Amount'],
+        x=month_vendors['Vendor'],
+        y=month_vendors['Amount'],
         marker=dict(
-            color=vendor_totals['Amount'],
+            color=month_vendors['Amount'],
             colorscale='Viridis',
             showscale=True,
             colorbar=dict(title="Amount Paid")
         ),
-        text=[f'₹{v:,.2f}' for v in vendor_totals['Amount']],
+        text=[f'₹{v:,.2f}' for v in month_vendors['Amount']],
         textposition='outside',
         hovertemplate='<b>%{x}</b><br>Amount: ₹%{y:,.2f}<extra></extra>'
     ))
     
     fig.update_layout(
-        title='Vendor Expense Breakdown (Sep-Dec 2025) — Sorted High→Low',
+        title=f'Vendor Expense Breakdown ({month} 2025) — Sorted High→Low',
         xaxis_title='Vendor',
         yaxis_title='Amount (INR)',
         height=500,
@@ -289,11 +294,29 @@ def main():
             
             st.markdown("---")
             
-            # Vendor Breakdown
+            # Vendor Breakdown - 4 separate charts for each month
             if not df_vendors.empty:
-                fig1 = create_vendor_breakdown(df_vendors)
-                if fig1:
-                    st.plotly_chart(fig1, use_container_width=True)
+                st.markdown("### 💼 Vendor Expense Breakdown (Month-wise)")
+                
+                # September
+                fig_sep = create_vendor_breakdown(df_vendors, 'Sep')
+                if fig_sep:
+                    st.plotly_chart(fig_sep, use_container_width=True)
+                
+                # October
+                fig_oct = create_vendor_breakdown(df_vendors, 'Oct')
+                if fig_oct:
+                    st.plotly_chart(fig_oct, use_container_width=True)
+                
+                # November
+                fig_nov = create_vendor_breakdown(df_vendors, 'Nov')
+                if fig_nov:
+                    st.plotly_chart(fig_nov, use_container_width=True)
+                
+                # December
+                fig_dec = create_vendor_breakdown(df_vendors, 'Dec')
+                if fig_dec:
+                    st.plotly_chart(fig_dec, use_container_width=True)
             
             # Extra Income
             st.markdown("### 💰 Extra Income (Month-wise)")
