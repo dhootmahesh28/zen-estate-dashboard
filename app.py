@@ -77,19 +77,20 @@ def load_excel_data(file):
                         'Difference': float(diff_val) if pd.notna(diff_val) else 0
                     })
         
-        # Get vendor data for December (as shown in HTML)
+        # Get vendor data for December only (rows 55-67)
         vendor_data = []
-        dec_start = 54
-        dec_end = 67
+        dec_vendor_start = 55  # First vendor row
+        dec_vendor_end = 68    # End before "Jan 2026" header
         
-        for idx in range(dec_start + 2, dec_end):
-            vendor = df.iloc[idx, 2]
-            amount = df.iloc[idx, 3]
-            if pd.notna(vendor) and pd.notna(amount) and isinstance(amount, (int, float)) and amount > 0:
-                vendor_data.append({
-                    'Vendor': str(vendor),
-                    'Amount': float(amount)
-                })
+        for idx in range(dec_vendor_start, dec_vendor_end):
+            if idx < len(df):
+                vendor = df.iloc[idx, 2]
+                amount = df.iloc[idx, 3]
+                if pd.notna(vendor) and pd.notna(amount) and isinstance(amount, (int, float)) and amount > 0:
+                    vendor_data.append({
+                        'Vendor': str(vendor),
+                        'Amount': float(amount)
+                    })
         
         df_monthly = pd.DataFrame(monthly_data)
         df_wings = pd.DataFrame(wing_data)
@@ -190,15 +191,6 @@ def create_combined_monthly_chart(df_monthly):
         marker=dict(size=10)
     ))
     
-    fig.add_trace(go.Scatter(
-        x=df_monthly['Month'],
-        y=df_monthly['Extra_Income'],
-        mode='lines+markers',
-        name='Extra Income',
-        line=dict(color='#FFA15A', width=3),
-        marker=dict(size=10)
-    ))
-    
     fig.update_layout(
         title='Month-wise Comparison (Using Total Monthly Expense)',
         xaxis_title='Month',
@@ -214,13 +206,13 @@ def create_wing_difference_chart(df_wings):
     # Aggregate total difference per wing across all months
     wing_totals = df_wings.groupby('Wing')['Difference'].sum().reset_index()
     
-    # Create color array: green for positive, red for negative, gray for zero
+    # Create color array: Excess (positive) = GREEN, Pending (negative) = RED
     colors = []
     for diff in wing_totals['Difference']:
         if diff > 0:
-            colors.append('#2ca02c')  # Green
+            colors.append('#2ca02c')  # Green for excess
         elif diff < 0:
-            colors.append('#d62728')  # Red
+            colors.append('#d62728')  # Red for pending
         else:
             colors.append('#9e9e9e')  # Gray
     
