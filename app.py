@@ -50,6 +50,24 @@ st.markdown("""
     .data {
         text-align: center !important;
     }
+    
+    /* Additional CSS for Streamlit styled dataframes */
+    .st-dataframe {
+        text-align: center !important;
+    }
+    
+    /* Target all table elements */
+    table {
+        width: 100% !important;
+    }
+    
+    table tr td {
+        text-align: center !important;
+    }
+    
+    table tr th {
+        text-align: center !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -387,7 +405,8 @@ def main():
                 }).set_properties(**{
                     'text-align': 'center'
                 }).set_table_styles([
-                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold'), ('padding', '12px'), ('font-size', '1.1rem')]},
+                    {'selector': 'td', 'props': [('text-align', 'center'), ('padding', '10px'), ('font-size', '1rem')]}
                 ]),
                 use_container_width=True
             )
