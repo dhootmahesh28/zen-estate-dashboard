@@ -217,15 +217,23 @@ def create_extra_income_chart(df_monthly):
         marker_color='#FFA15A',
         text=[f'₹{v:,.0f}' for v in df_monthly['Extra_Income']],
         textposition='outside',
+        textfont=dict(size=12),
         hovertemplate='<b>%{x}</b><br>Extra Income: ₹%{y:,.0f}<extra></extra>'
     ))
+    
+    # Calculate max value for proper y-axis range
+    max_value = df_monthly['Extra_Income'].max()
     
     fig.update_layout(
         title='Extra Income by Month',
         xaxis_title='Month',
         yaxis_title='Amount (INR)',
         height=420,
-        yaxis=dict(tickprefix='₹', tickformat=',.0f')
+        yaxis=dict(
+            tickprefix='₹', 
+            tickformat=',.0f',
+            range=[0, max_value * 1.15]  # Add 15% padding for text visibility
+        )
     )
     
     return fig
@@ -376,7 +384,7 @@ def main():
             
             # Extra Income Breakdown by Source
             if not df_extra_income_breakdown.empty:
-                st.markdown("#### 📋 Extra Income Breakdown by Source")
+                st.markdown("#### 📋 Extra Income Breakdown")
                 
                 # Create a formatted dataframe
                 breakdown_display = df_extra_income_breakdown.copy()
@@ -397,7 +405,7 @@ def main():
                 )
             
             # Combined Monthly
-            st.markdown("### 📈 Combined Month-wise — To Be, Received, Expenses, Extra Income")
+            st.markdown("### 📈 Combined Month-wise — To Be, Received, Expenses")
             fig3 = create_combined_monthly_chart(df_monthly)
             if fig3:
                 st.plotly_chart(fig3, use_container_width=True)
