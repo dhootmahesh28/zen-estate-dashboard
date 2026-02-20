@@ -41,7 +41,7 @@ def load_excel_from_github():
     except Exception as e:
         st.error(f"Error loading data from GitHub: {e}")
         st.info("Please make sure the Excel file is uploaded to your GitHub repository.")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 @st.cache_data
 def load_excel_data(file):
@@ -130,7 +130,37 @@ def load_excel_data(file):
         df_wings = pd.DataFrame(wing_data)
         df_vendors = pd.DataFrame(vendor_data) if vendor_data else pd.DataFrame()
         
-        return df_monthly, df_wings, df_vendors
+        # Extract Extra Income breakdown by source
+        # Using specific rows: Sep=9, Oct=29, Nov=45, Dec=62, Jan=77 (Excel rows)
+        # Columns: NBH=23(X), Lift=24(Y), Event=25(Z), Scrap=26(AA)
+        extra_income_breakdown = []
+        
+        month_rows = {
+            'Sep': 8,   # Row 9 in Excel = index 8
+            'Oct': 28,  # Row 29 in Excel = index 28
+            'Nov': 44,  # Row 45 in Excel = index 44
+            'Dec': 61,  # Row 62 in Excel = index 61
+            'Jan': 76   # Row 77 in Excel = index 76
+        }
+        
+        for month, row_idx in month_rows.items():
+            if row_idx < len(df):
+                nbh = df.iloc[row_idx, 23] if pd.notna(df.iloc[row_idx, 23]) else 0
+                lift = df.iloc[row_idx, 24] if pd.notna(df.iloc[row_idx, 24]) else 0
+                event = df.iloc[row_idx, 25] if pd.notna(df.iloc[row_idx, 25]) else 0
+                scrap = df.iloc[row_idx, 26] if pd.notna(df.iloc[row_idx, 26]) else 0
+                
+                extra_income_breakdown.append({
+                    'Month': month,
+                    'NBH': float(nbh) if isinstance(nbh, (int, float)) else 0,
+                    'Lift': float(lift) if isinstance(lift, (int, float)) else 0,
+                    'Event': float(event) if isinstance(event, (int, float)) else 0,
+                    'Scrap': float(scrap) if isinstance(scrap, (int, float)) else 0
+                })
+        
+        df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
+        
+        return df_monthly, df_wings, df_vendors, df_extra_income_breakdown
         
     except Exception as e:
         st.error(f"Error loading data: {e}")
@@ -167,7 +197,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     fig.update_layout(
-        title=f'Vendor Expense Breakdown ({month} 2025) — Sorted High→Low',
+        title=f'Vendor Expense Breakdown ({month} 2025)',
         xaxis_title='Vendor',
         yaxis_title='Amount (INR)',
         height=500,
@@ -232,7 +262,7 @@ def create_combined_monthly_chart(df_monthly):
     ))
     
     fig.update_layout(
-        title='Month-wise Comparison (Using Total Monthly Expense)',
+        title='Combined Month-wise — To Be, Received, Expenses',
         xaxis_title='Month',
         yaxis_title='Amount (INR)',
         height=520,
@@ -289,7 +319,7 @@ def main():
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
-        df_monthly, df_wings, df_vendors = load_excel_from_github()
+        df_monthly, df_wings, df_vendors, df_extra_income_breakdown = load_excel_from_github()
     
     if not df_monthly.empty:
             # Monthly Overview Table
@@ -343,6 +373,28 @@ def main():
             fig2 = create_extra_income_chart(df_monthly)
             if fig2:
                 st.plotly_chart(fig2, use_container_width=True)
+            
+            # Extra Income Breakdown by Source
+            if not df_extra_income_breakdown.empty:
+                st.markdown("#### 📋 Extra Income Breakdown by Source")
+                
+                # Create a formatted dataframe
+                breakdown_display = df_extra_income_breakdown.copy()
+                
+                # Add total column
+                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap']].sum(axis=1)
+                
+                # Display as table
+                st.dataframe(
+                    breakdown_display.style.format({
+                        'NBH': '₹{:,.2f}',
+                        'Lift': '₹{:,.2f}',
+                        'Event': '₹{:,.2f}',
+                        'Scrap': '₹{:,.2f}',
+                        'Total': '₹{:,.2f}'
+                    }),
+                    use_container_width=True
+                )
             
             # Combined Monthly
             st.markdown("### 📈 Combined Month-wise — To Be, Received, Expenses, Extra Income")
