@@ -500,14 +500,14 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
             if not df_wings.empty:
-                # Create detailed breakdown
-                st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop**")
+                st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop** *(Sorted by Wing/Shop name)*")
                 
                 # Format the dataframe for better display
                 detailed_breakdown = df_wings.copy()
-                # Sort by Wing (alphabetically) then Month - this locks the initial sort
+                # Sort by Wing (alphabetically) then Month - this groups Wings/Shops together
+                # Wing order: A Shop, A Wing, B Shop, B Wing, C Shop Rahul, C Shop Sagar, C Shop Total, C Wing, etc.
                 detailed_breakdown = detailed_breakdown.sort_values(['Wing', 'Month'])
-                # Reset index to show sequential numbering
+                # Reset index to show sequential numbering starting from 0
                 detailed_breakdown = detailed_breakdown.reset_index(drop=True)
                 
                 # Rename columns for clarity
