@@ -490,6 +490,99 @@ def main():
                 if fig4:
                     st.plotly_chart(fig4, use_container_width=True)
             
+            # Shop Filter Section
+            st.markdown("""
+                <div style='background: linear-gradient(90deg, #ff7f0e 0%, #d62728 100%); 
+                            color: white; padding: 15px; border-radius: 10px; 
+                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    🛍️ Shop-Wise Analysis
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if not df_wings.empty:
+                # Get unique shops
+                shops = sorted([wing for wing in df_wings['Wing'].unique() if 'Shop' in wing])
+                
+                if shops:
+                    # Create columns for better layout
+                    col1, col2 = st.columns([1, 3])
+                    
+                    with col1:
+                        selected_shop = st.selectbox('Select a Shop:', shops, key='shop_filter')
+                    
+                    with col2:
+                        st.write("")  # Spacing
+                    
+                    # Filter data for selected shop
+                    shop_data = df_wings[df_wings['Wing'] == selected_shop].copy()
+                    
+                    if not shop_data.empty:
+                        # Calculate totals
+                        total_to_be = shop_data['To_Be'].sum()
+                        total_received = shop_data['Received'].sum()
+                        total_difference = shop_data['Difference'].sum()
+                        
+                        # Display metrics
+                        st.subheader(f"📊 {selected_shop} - Summary")
+                        
+                        metric_cols = st.columns(3)
+                        
+                        with metric_cols[0]:
+                            st.metric("Total To Be Received", f"₹{total_to_be:,.2f}")
+                        
+                        with metric_cols[1]:
+                            st.metric("Total Received", f"₹{total_received:,.2f}")
+                        
+                        with metric_cols[2]:
+                            # Color code based on pending/excess
+                            if total_difference > 0:
+                                st.metric("Total Pending", f"₹{total_difference:,.2f}", delta=None, 
+                                         help="Amount still to be received")
+                            else:
+                                st.metric("Total Excess", f"₹{abs(total_difference):,.2f}", delta=None,
+                                         help="Amount received extra")
+                        
+                        # Display detailed breakdown
+                        st.subheader(f"📋 {selected_shop} - Monthly Breakdown")
+                        
+                        shop_display = shop_data.copy()
+                        shop_display = shop_display.sort_values('Month')
+                        shop_display = shop_display.rename(columns={
+                            'To_Be': 'To Be Received',
+                            'Received': 'Actual Received',
+                            'Difference': 'Pending/Excess (-ve = Excess)'
+                        })
+                        
+                        # Style the dataframe
+                        def color_shop_difference(val):
+                            if val < 0:
+                                return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
+                            elif val > 0:
+                                return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
+                            else:
+                                return 'background-color: #ffffcc'  # Yellow for zero
+                        
+                        styled_shop_df = shop_display[['Month', 'To Be Received', 'Actual Received', 'Pending/Excess (-ve = Excess)']].style.format({
+                            'To Be Received': '₹{:,.2f}',
+                            'Actual Received': '₹{:,.2f}',
+                            'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
+                        }).applymap(color_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
+                        
+                        styled_shop_df = styled_shop_df.set_properties(**{
+                            'text-align': 'center'
+                        }).set_table_styles([
+                            {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
+                            {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '1rem')]}
+                        ])
+                        
+                        st.dataframe(
+                            styled_shop_df,
+                            use_container_width=True
+                        )
+                    else:
+                        st.warning(f"No data available for {selected_shop}")
+            
             # Detailed Wing/Shop Monthly Breakdown Table
             st.markdown("""
                 <div style='background: linear-gradient(90deg, #2ca02c 0%, #1f77b4 100%); 
