@@ -390,9 +390,11 @@ def main():
                         f"vendor_data_{datetime.now().strftime('%Y%m%d')}.csv",
                         "text/csv"
                     )
-        else:
-            st.warning("⚠️ No data found")
     else:
+        st.warning("⚠️ No data found")
+    
+    # Error handling if data couldn't be loaded
+    if df_monthly.empty:
         st.error("❌ Unable to load data from repository")
         st.info("Please ensure the Excel file is committed to the GitHub repository.")
 
