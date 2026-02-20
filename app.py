@@ -337,10 +337,11 @@ def main():
             overview_data['Difference'] = overview_data['To_Be'] - overview_data['Received']
             
             st.dataframe(
-                overview_data[['Month', 'To_Be', 'Received', 'Difference']].style.format({
+                overview_data[['Month', 'To_Be', 'Received', 'Difference', 'Expense']].style.format({
                     'To_Be': '₹{:,.2f}',
                     'Received': '₹{:,.2f}',
-                    'Difference': '₹{:,.2f}'
+                    'Difference': '₹{:,.2f}',
+                    'Expense': '₹{:,.2f}'
                 }),
                 use_container_width=True
             )
@@ -404,18 +405,40 @@ def main():
                     use_container_width=True
                 )
             
-            # Combined Monthly
-            st.markdown("### 📈 Combined Month-wise — To Be, Received, Expenses")
-            fig3 = create_combined_monthly_chart(df_monthly)
-            if fig3:
-                st.plotly_chart(fig3, use_container_width=True)
-            
             # Wing/Shop Analysis
             st.markdown("### 🏘️ Pending/Excess Amount Received by Wing/Shop")
             if not df_wings.empty:
                 fig4 = create_wing_difference_chart(df_wings)
                 if fig4:
                     st.plotly_chart(fig4, use_container_width=True)
+            
+            # Detailed Wing/Shop Monthly Breakdown Table
+            st.markdown("### 📋 Wing/Shop Monthly Details")
+            if not df_wings.empty:
+                # Create detailed breakdown
+                st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop**")
+                
+                # Format the dataframe for better display
+                detailed_breakdown = df_wings.copy()
+                detailed_breakdown = detailed_breakdown.sort_values(['Wing', 'Month'])
+                
+                # Rename columns for clarity
+                detailed_breakdown = detailed_breakdown.rename(columns={
+                    'To_Be': 'To Be Received',
+                    'Received': 'Actual Received'
+                })
+                
+                # Display the table
+                st.dataframe(
+                    detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Difference']].style.format({
+                        'To Be Received': '₹{:,.2f}',
+                        'Actual Received': '₹{:,.2f}',
+                        'Difference': '₹{:,.2f}'
+                    }).apply(lambda x: ['background-color: #ffcccc' if v < 0 else 'background-color: #ccffcc' if v > 0 else '' 
+                                       for v in detailed_breakdown['Difference']], subset=['Difference']),
+                    use_container_width=True,
+                    height=600
+                )
             
             # Download Reports
             st.markdown("---")
