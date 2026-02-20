@@ -509,8 +509,9 @@ def main():
                 month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
                 
-                # Sort by Wing (alphabetically) then Month (chronologically: Sep, Oct, Nov, Dec, Jan)
-                detailed_breakdown = detailed_breakdown.sort_values(['Wing', 'Month_Sort'])
+                # Sort by Month FIRST (chronologically), then Wing (alphabetically)
+                # This groups all Wings/Shops for each month together
+                detailed_breakdown = detailed_breakdown.sort_values(['Month_Sort', 'Wing'])
                 
                 # Remove the helper column
                 detailed_breakdown = detailed_breakdown.drop('Month_Sort', axis=1)
