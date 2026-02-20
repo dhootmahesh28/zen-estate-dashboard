@@ -196,8 +196,11 @@ def create_vendor_breakdown(df_vendors, month):
         hovertemplate='<b>%{x}</b><br>Amount: ₹%{y:,.2f}<extra></extra>'
     ))
     
+    # Set the year based on month
+    year = "2026" if month == "Jan" else "2025"
+    
     fig.update_layout(
-        title=f'Vendor Expense Breakdown ({month} 2025)',
+        title=f'Vendor Expense Breakdown ({month} {year})',
         xaxis_title='Vendor',
         yaxis_title='Amount (INR)',
         height=500,
@@ -434,7 +437,7 @@ def main():
                         'To Be Received': '₹{:,.2f}',
                         'Actual Received': '₹{:,.2f}',
                         'Difference': '₹{:,.2f}'
-                    }).apply(lambda x: ['background-color: #ffcccc' if v < 0 else 'background-color: #ccffcc' if v > 0 else '' 
+                    }).apply(lambda x: ['background-color: #ccffcc' if v < 0 else 'background-color: #ffcccc' if v > 0 else '' 
                                        for v in detailed_breakdown['Difference']], subset=['Difference']),
                     use_container_width=True,
                     height=600
