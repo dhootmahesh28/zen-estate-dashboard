@@ -525,18 +525,52 @@ def main():
                     'Received': 'Actual Received'
                 })
                 
+                # Create a function to apply alternating month backgrounds
+                def highlight_months(row):
+                    month = row['Month']
+                    # Assign background colors based on month
+                    if month == 'Sep':
+                        return ['background-color: #e6f2ff'] * len(row)  # Light blue
+                    elif month == 'Oct':
+                        return ['background-color: #fff4e6'] * len(row)  # Light orange
+                    elif month == 'Nov':
+                        return ['background-color: #e6ffe6'] * len(row)  # Light green
+                    elif month == 'Dec':
+                        return ['background-color: #ffe6f2'] * len(row)  # Light pink
+                    elif month == 'Jan':
+                        return ['background-color: #f2e6ff'] * len(row)  # Light purple
+                    else:
+                        return [''] * len(row)
+                
+                # Apply styling
+                styled_df = detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Difference']].style.format({
+                    'To Be Received': '₹{:,.2f}',
+                    'Actual Received': '₹{:,.2f}',
+                    'Difference': '₹{:,.2f}'
+                }).apply(highlight_months, axis=1)
+                
+                # Apply difference color coding on top of month backgrounds
+                def color_difference(val):
+                    if val < 0:
+                        return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
+                    elif val > 0:
+                        return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
+                    else:
+                        return ''
+                
+                styled_df = styled_df.applymap(color_difference, subset=['Difference'])
+                
+                # Add center alignment and header styling
+                styled_df = styled_df.set_properties(**{
+                    'text-align': 'center'
+                }).set_table_styles([
+                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
+                    {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '1rem')]}
+                ])
+                
                 # Display the table
                 st.dataframe(
-                    detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Difference']].style.format({
-                        'To Be Received': '₹{:,.2f}',
-                        'Actual Received': '₹{:,.2f}',
-                        'Difference': '₹{:,.2f}'
-                    }).apply(lambda x: ['background-color: #ccffcc' if v < 0 else 'background-color: #ffcccc' if v > 0 else '' 
-                                       for v in detailed_breakdown['Difference']], subset=['Difference']).set_properties(**{
-                        'text-align': 'center'
-                    }).set_table_styles([
-                        {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
-                    ]),
+                    styled_df,
                     use_container_width=True,
                     height=600
                 )
