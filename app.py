@@ -18,8 +18,11 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    /* Center align all dataframe cells and headers */
-    div[data-testid="stDataFrame"] table th {
+    /* Center align all dataframe cells and headers - Multiple selectors for better compatibility */
+    div[data-testid="stDataFrame"] table th,
+    div[data-testid="stDataFrame"] thead th,
+    .dataframe th,
+    .dataframe thead th {
         text-align: center !important;
         background-color: #1f77b4 !important;
         color: white !important;
@@ -27,10 +30,25 @@ st.markdown("""
         padding: 12px !important;
         font-size: 1.1rem !important;
     }
-    div[data-testid="stDataFrame"] table td {
+    div[data-testid="stDataFrame"] table td,
+    div[data-testid="stDataFrame"] tbody td,
+    .dataframe td,
+    .dataframe tbody td {
         text-align: center !important;
         padding: 10px !important;
         font-size: 1rem !important;
+    }
+    /* Also target the styled dataframes */
+    .row_heading {
+        text-align: center !important;
+    }
+    .col_heading {
+        text-align: center !important;
+        background-color: #1f77b4 !important;
+        color: white !important;
+    }
+    .data {
+        text-align: center !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -366,7 +384,11 @@ def main():
                     'Received': '₹{:,.2f}',
                     'Difference': '₹{:,.2f}',
                     'Expense': '₹{:,.2f}'
-                }),
+                }).set_properties(**{
+                    'text-align': 'center'
+                }).set_table_styles([
+                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                ]),
                 use_container_width=True
             )
             
@@ -446,7 +468,11 @@ def main():
                         'Event': '₹{:,.2f}',
                         'Scrap': '₹{:,.2f}',
                         'Total': '₹{:,.2f}'
-                    }),
+                    }).set_properties(**{
+                        'text-align': 'center'
+                    }).set_table_styles([
+                        {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                    ]),
                     use_container_width=True
                 )
             
@@ -497,7 +523,11 @@ def main():
                         'Actual Received': '₹{:,.2f}',
                         'Difference': '₹{:,.2f}'
                     }).apply(lambda x: ['background-color: #ccffcc' if v < 0 else 'background-color: #ffcccc' if v > 0 else '' 
-                                       for v in detailed_breakdown['Difference']], subset=['Difference']),
+                                       for v in detailed_breakdown['Difference']], subset=['Difference']).set_properties(**{
+                        'text-align': 'center'
+                    }).set_table_styles([
+                        {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                    ]),
                     use_container_width=True,
                     height=600
                 )
