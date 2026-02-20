@@ -18,6 +18,20 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
+    /* Center align all dataframe cells and headers */
+    div[data-testid="stDataFrame"] table th {
+        text-align: center !important;
+        background-color: #1f77b4 !important;
+        color: white !important;
+        font-weight: bold !important;
+        padding: 12px !important;
+        font-size: 1.1rem !important;
+    }
+    div[data-testid="stDataFrame"] table td {
+        text-align: center !important;
+        padding: 10px !important;
+        font-size: 1rem !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -334,7 +348,14 @@ def main():
     
     if not df_monthly.empty:
             # Monthly Overview Table
-            st.markdown("### 📊 Monthly Overview (To Be vs Received, Difference = To Be − Received)")
+            st.markdown("""
+                <div style='background: linear-gradient(90deg, #1f77b4 0%, #2ca02c 100%); 
+                            color: white; padding: 15px; border-radius: 10px; 
+                            font-size: 1.8rem; font-weight: bold; margin-bottom: 1rem;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    📊 Monthly Overview (To Be vs Received)
+                </div>
+            """, unsafe_allow_html=True)
             
             overview_data = df_monthly.copy()
             overview_data['Difference'] = overview_data['To_Be'] - overview_data['Received']
@@ -353,7 +374,14 @@ def main():
             
             # Vendor Breakdown - 5 separate charts for each month
             if not df_vendors.empty:
-                st.markdown("### 💼 Vendor Expense Breakdown (Month-wise)")
+                st.markdown("""
+                    <div style='background: linear-gradient(90deg, #ff7f0e 0%, #d62728 100%); 
+                                color: white; padding: 15px; border-radius: 10px; 
+                                font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
+                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                        💼 Vendor Expense Breakdown (Month-wise)
+                    </div>
+                """, unsafe_allow_html=True)
                 
                 # September
                 fig_sep = create_vendor_breakdown(df_vendors, 'Sep')
@@ -381,14 +409,28 @@ def main():
                     st.plotly_chart(fig_jan, use_container_width=True)
             
             # Extra Income
-            st.markdown("### 💰 Extra Income (Month-wise)")
+            st.markdown("""
+                <div style='background: linear-gradient(90deg, #9467bd 0%, #8c564b 100%); 
+                            color: white; padding: 15px; border-radius: 10px; 
+                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    💰 Extra Income (Month-wise)
+                </div>
+            """, unsafe_allow_html=True)
             fig2 = create_extra_income_chart(df_monthly)
             if fig2:
                 st.plotly_chart(fig2, use_container_width=True)
             
             # Extra Income Breakdown by Source
             if not df_extra_income_breakdown.empty:
-                st.markdown("#### 📋 Extra Income Breakdown")
+                st.markdown("""
+                    <div style='background: linear-gradient(90deg, #e377c2 0%, #7f7f7f 100%); 
+                                color: white; padding: 12px; border-radius: 8px; 
+                                font-size: 1.4rem; font-weight: bold; margin-top: 1.5rem; margin-bottom: 1rem;
+                                box-shadow: 0 3px 5px rgba(0,0,0,0.1);'>
+                        📋 Extra Income Breakdown
+                    </div>
+                """, unsafe_allow_html=True)
                 
                 # Create a formatted dataframe
                 breakdown_display = df_extra_income_breakdown.copy()
@@ -409,21 +451,38 @@ def main():
                 )
             
             # Wing/Shop Analysis
-            st.markdown("### 🏘️ Pending/Excess Amount Received by Wing/Shop")
+            st.markdown("""
+                <div style='background: linear-gradient(90deg, #17becf 0%, #bcbd22 100%); 
+                            color: white; padding: 15px; border-radius: 10px; 
+                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    🏘️ Pending/Excess Amount Received by Wing/Shop
+                </div>
+            """, unsafe_allow_html=True)
             if not df_wings.empty:
                 fig4 = create_wing_difference_chart(df_wings)
                 if fig4:
                     st.plotly_chart(fig4, use_container_width=True)
             
             # Detailed Wing/Shop Monthly Breakdown Table
-            st.markdown("### 📋 Wing/Shop Monthly Details")
+            st.markdown("""
+                <div style='background: linear-gradient(90deg, #2ca02c 0%, #1f77b4 100%); 
+                            color: white; padding: 15px; border-radius: 10px; 
+                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
+                    📋 Wing/Shop Monthly Details
+                </div>
+            """, unsafe_allow_html=True)
             if not df_wings.empty:
                 # Create detailed breakdown
                 st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop**")
                 
                 # Format the dataframe for better display
                 detailed_breakdown = df_wings.copy()
+                # Sort by Wing (alphabetically) then Month - this locks the initial sort
                 detailed_breakdown = detailed_breakdown.sort_values(['Wing', 'Month'])
+                # Reset index to show sequential numbering
+                detailed_breakdown = detailed_breakdown.reset_index(drop=True)
                 
                 # Rename columns for clarity
                 detailed_breakdown = detailed_breakdown.rename(columns={
