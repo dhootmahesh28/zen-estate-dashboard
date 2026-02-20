@@ -547,7 +547,12 @@ def main():
                         st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
                         
                         wing_shop_display = wing_shop_data.copy()
-                        wing_shop_display = wing_shop_display.sort_values('Month')
+                        
+                        # Create a custom sort order for months
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
+                        wing_shop_display['Month_Sort'] = wing_shop_display['Month'].map(month_order)
+                        wing_shop_display = wing_shop_display.sort_values('Month_Sort')
+                        wing_shop_display = wing_shop_display.drop('Month_Sort', axis=1)
                         wing_shop_display = wing_shop_display.rename(columns={
                             'To_Be': 'To Be Received',
                             'Received': 'Actual Received',
