@@ -22,6 +22,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data
+def load_excel_from_github():
+    """Load Excel file directly from GitHub repository"""
+    # GitHub raw file URL - UPDATE THIS with your actual file URL
+    GITHUB_EXCEL_URL = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
+    
+    try:
+        import requests
+        from io import BytesIO
+        
+        # Download the file
+        response = requests.get(GITHUB_EXCEL_URL)
+        response.raise_for_status()
+        
+        # Load into pandas
+        excel_file = BytesIO(response.content)
+        return load_excel_data(excel_file)
+    except Exception as e:
+        st.error(f"Error loading data from GitHub: {e}")
+        st.info("Please make sure the Excel file is uploaded to your GitHub repository.")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+@st.cache_data
 def load_excel_data(file):
     """Load all financial data from Excel"""
     try:
@@ -265,25 +287,11 @@ def create_wing_difference_chart(df_wings):
 def main():
     st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Jan 2026)</h1>', unsafe_allow_html=True)
     
-    with st.sidebar:
-        st.header("📁 Upload Data")
-        uploaded_file = st.file_uploader("Upload Excel File", type=['xlsx', 'xls'])
-        st.markdown("---")
-        st.markdown("### 📊 Dashboard Sections")
-        st.markdown("""
-        - Vendor Expense Breakdown
-        - Extra Income by Month
-        - Combined Monthly Comparison
-        - Wing/Shop Analysis
-        """)
-        st.info("💡 Upload your Excel file to see live data")
+    # Auto-load data from GitHub (no upload needed)
+    with st.spinner('Loading latest data from repository...'):
+        df_monthly, df_wings, df_vendors = load_excel_from_github()
     
-    if uploaded_file:
-        df_monthly, df_wings, df_vendors = load_excel_data(uploaded_file)
-        
-        if not df_monthly.empty:
-            st.success('✅ Data loaded successfully!')
-            
+    if not df_monthly.empty:
             # Monthly Overview Table
             st.markdown("### 📊 Monthly Overview (To Be vs Received, Difference = To Be − Received)")
             
@@ -385,17 +393,8 @@ def main():
         else:
             st.warning("⚠️ No data found")
     else:
-        st.markdown("""
-        ### 👋 Welcome to Zen Estate Financial Dashboard
-        
-        Upload your Excel file to visualize:
-        - **Vendor Expense Breakdown** with color-coded amounts
-        - **Extra Income** tracking by month
-        - **Combined Monthly View** of To Be, Received, Expenses, and Extra Income
-        - **Wing/Shop Analysis** showing pending (red) and excess (green) amounts
-        
-        **👈 Upload your file from the sidebar to begin!**
-        """)
+        st.error("❌ Unable to load data from repository")
+        st.info("Please ensure the Excel file is committed to the GitHub repository.")
 
 if __name__ == "__main__":
     main()
