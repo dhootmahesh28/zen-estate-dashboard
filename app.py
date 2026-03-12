@@ -665,17 +665,18 @@ def main():
                         
                         # Populate fine details for each month from wing_shop_fines
                         if not wing_shop_fines.empty:
-                            for idx, row in wing_shop_display.iterrows():
-                                month = row['Month']
+                            for display_idx, display_row in wing_shop_display.iterrows():
+                                month = display_row['Month']
                                 # Get fine data for this month and wing
                                 fine_month_data = wing_shop_fines[wing_shop_fines['Month'] == month]
                                 
                                 if not fine_month_data.empty:
-                                    # Get the fine values for this month
-                                    hk = float(fine_month_data['HK'].iloc[0]) if not fine_month_data['HK'].isna().all() else 0
-                                    quinteze = float(fine_month_data['Quinteze'].iloc[0]) if not fine_month_data['Quinteze'].isna().all() else 0
-                                    security = float(fine_month_data['Security'].iloc[0]) if not fine_month_data['Security'].isna().all() else 0
-                                    stp = float(fine_month_data['STP'].iloc[0]) if not fine_month_data['STP'].isna().all() else 0
+                                    # Get the fine values for this month (use iloc to get first row)
+                                    fine_row = fine_month_data.iloc[0]
+                                    hk = float(fine_row['HK']) if pd.notna(fine_row['HK']) else 0
+                                    quinteze = float(fine_row['Quinteze']) if pd.notna(fine_row['Quinteze']) else 0
+                                    security = float(fine_row['Security']) if pd.notna(fine_row['Security']) else 0
+                                    stp = float(fine_row['STP']) if pd.notna(fine_row['STP']) else 0
                                     
                                     total_month_fine = hk + quinteze + security + stp
                                     
@@ -690,9 +691,10 @@ def main():
                                     if stp > 0:
                                         fine_details_list.append(f"STP: ₹{stp:,.0f}")
                                     
+                                    # Assign to the correct position
                                     if fine_details_list:
-                                        wing_shop_display.at[idx, 'Fine_Details'] = ' | '.join(fine_details_list)
-                                        wing_shop_display.at[idx, 'Fine_Amount'] = total_month_fine
+                                        wing_shop_display.loc[display_idx, 'Fine_Details'] = ' | '.join(fine_details_list)
+                                        wing_shop_display.loc[display_idx, 'Fine_Amount'] = total_month_fine
                         
                         # Update the difference column to account for fines
                         wing_shop_display['Adjusted_Difference'] = wing_shop_display['Difference'] - wing_shop_display['Fine_Amount']
