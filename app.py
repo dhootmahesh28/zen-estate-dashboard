@@ -91,7 +91,7 @@ def load_excel_from_github():
     except Exception as e:
         st.error(f"Error loading data from GitHub: {e}")
         st.info("Please make sure the Excel file is uploaded to your GitHub repository.")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 @st.cache_data
 def load_excel_data(file):
@@ -181,36 +181,42 @@ def load_excel_data(file):
         df_vendors = pd.DataFrame(vendor_data) if vendor_data else pd.DataFrame()
         
         # Extract Fine data by vendor type and wing/shop
+        # Fine header rows: Sep=1, Oct=20, Nov=36, Dec=53, Jan=68 (0-indexed)
         # Fine columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
-        # Fine rows: Sep=rows 3-11, Oct=rows 22-30, Nov=rows 38-46, Dec=rows 55-63, Jan=rows 71-79
+        # Wing data rows: Start at header+2, end at header+11
         fine_data = []
         
         fine_sections = [
-            {'month': 'Sep', 'start': 3, 'end': 12, 'header_row': 2},     # Sep: Rows 3-11 (0-indexed)
-            {'month': 'Oct', 'start': 22, 'end': 31, 'header_row': 21},   # Oct: Rows 22-30
-            {'month': 'Nov', 'start': 38, 'end': 47, 'header_row': 37},   # Nov: Rows 38-46
-            {'month': 'Dec', 'start': 55, 'end': 64, 'header_row': 54},   # Dec: Rows 55-63
-            {'month': 'Jan', 'start': 71, 'end': 80, 'header_row': 70}    # Jan: Rows 71-79
+            {'month': 'Sep', 'header_row': 1, 'start': 3, 'end': 12},     # Rows 3-11
+            {'month': 'Oct', 'header_row': 20, 'start': 22, 'end': 31},   # Rows 22-30
+            {'month': 'Nov', 'header_row': 36, 'start': 38, 'end': 47},   # Rows 38-46
+            {'month': 'Dec', 'header_row': 53, 'start': 55, 'end': 64},   # Rows 55-63
+            {'month': 'Jan', 'header_row': 68, 'start': 70, 'end': 79}    # Rows 70-78 (actual Jan section starts at 86 for parking fines, so use 68-78)
         ]
         
         for section in fine_sections:
             for row_idx in range(section['start'], min(section['end'], len(df))):
                 wing = df.iloc[row_idx, 29]  # Col 29 = Wing
-                if pd.notna(wing) and wing != 'Total':
-                    hk_fine = df.iloc[row_idx, 30] if pd.notna(df.iloc[row_idx, 30]) else 0      # HK
-                    quinteze_fine = df.iloc[row_idx, 31] if pd.notna(df.iloc[row_idx, 31]) else 0  # Quinteze
-                    security_fine = df.iloc[row_idx, 32] if pd.notna(df.iloc[row_idx, 32]) else 0  # Security
-                    stp_fine = df.iloc[row_idx, 33] if pd.notna(df.iloc[row_idx, 33]) else 0    # STP
+                if pd.notna(wing) and isinstance(wing, str) and 'Wing' in str(wing):
+                    hk_fine = df.iloc[row_idx, 30]      # HK (Col 30)
+                    quinteze_fine = df.iloc[row_idx, 31]  # Quinteze (Col 31)
+                    security_fine = df.iloc[row_idx, 32]  # Security (Col 32)
+                    stp_fine = df.iloc[row_idx, 33]    # STP (Col 33)
                     
-                    total_fine = float(hk_fine) + float(quinteze_fine) + float(security_fine) + float(stp_fine)
+                    hk_fine = float(hk_fine) if pd.notna(hk_fine) and isinstance(hk_fine, (int, float)) else 0
+                    quinteze_fine = float(quinteze_fine) if pd.notna(quinteze_fine) and isinstance(quinteze_fine, (int, float)) else 0
+                    security_fine = float(security_fine) if pd.notna(security_fine) and isinstance(security_fine, (int, float)) else 0
+                    stp_fine = float(stp_fine) if pd.notna(stp_fine) and isinstance(stp_fine, (int, float)) else 0
+                    
+                    total_fine = hk_fine + quinteze_fine + security_fine + stp_fine
                     
                     fine_data.append({
                         'Month': section['month'],
                         'Wing': wing,
-                        'HK': float(hk_fine) if hk_fine > 0 else 0,
-                        'Quinteze': float(quinteze_fine) if quinteze_fine > 0 else 0,
-                        'Security': float(security_fine) if security_fine > 0 else 0,
-                        'STP': float(stp_fine) if stp_fine > 0 else 0,
+                        'HK': hk_fine,
+                        'Quinteze': quinteze_fine,
+                        'Security': security_fine,
+                        'STP': stp_fine,
                         'Total_Fine': total_fine
                     })
         
