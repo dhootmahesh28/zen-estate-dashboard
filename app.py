@@ -180,6 +180,42 @@ def load_excel_data(file):
         df_wings = pd.DataFrame(wing_data)
         df_vendors = pd.DataFrame(vendor_data) if vendor_data else pd.DataFrame()
         
+        # Extract Fine data by vendor type and wing/shop
+        # Fine columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
+        # Fine rows: Sep=rows 3-11, Oct=rows 22-30, Nov=rows 38-46, Dec=rows 55-63, Jan=rows 71-79
+        fine_data = []
+        
+        fine_sections = [
+            {'month': 'Sep', 'start': 3, 'end': 12, 'header_row': 2},     # Sep: Rows 3-11 (0-indexed)
+            {'month': 'Oct', 'start': 22, 'end': 31, 'header_row': 21},   # Oct: Rows 22-30
+            {'month': 'Nov', 'start': 38, 'end': 47, 'header_row': 37},   # Nov: Rows 38-46
+            {'month': 'Dec', 'start': 55, 'end': 64, 'header_row': 54},   # Dec: Rows 55-63
+            {'month': 'Jan', 'start': 71, 'end': 80, 'header_row': 70}    # Jan: Rows 71-79
+        ]
+        
+        for section in fine_sections:
+            for row_idx in range(section['start'], min(section['end'], len(df))):
+                wing = df.iloc[row_idx, 29]  # Col 29 = Wing
+                if pd.notna(wing) and wing != 'Total':
+                    hk_fine = df.iloc[row_idx, 30] if pd.notna(df.iloc[row_idx, 30]) else 0      # HK
+                    quinteze_fine = df.iloc[row_idx, 31] if pd.notna(df.iloc[row_idx, 31]) else 0  # Quinteze
+                    security_fine = df.iloc[row_idx, 32] if pd.notna(df.iloc[row_idx, 32]) else 0  # Security
+                    stp_fine = df.iloc[row_idx, 33] if pd.notna(df.iloc[row_idx, 33]) else 0    # STP
+                    
+                    total_fine = float(hk_fine) + float(quinteze_fine) + float(security_fine) + float(stp_fine)
+                    
+                    fine_data.append({
+                        'Month': section['month'],
+                        'Wing': wing,
+                        'HK': float(hk_fine) if hk_fine > 0 else 0,
+                        'Quinteze': float(quinteze_fine) if quinteze_fine > 0 else 0,
+                        'Security': float(security_fine) if security_fine > 0 else 0,
+                        'STP': float(stp_fine) if stp_fine > 0 else 0,
+                        'Total_Fine': total_fine
+                    })
+        
+        df_fines = pd.DataFrame(fine_data) if fine_data else pd.DataFrame()
+        
         # Extract Extra Income breakdown by source
         # Using specific rows: Sep=9, Oct=29, Nov=45, Dec=62, Jan=77 (Excel rows)
         # Columns: NBH=23(X), Lift=24(Y), Event=25(Z), Scrap=26(AA)
@@ -210,11 +246,11 @@ def load_excel_data(file):
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
         
-        return df_monthly, df_wings, df_vendors, df_extra_income_breakdown
+        return df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines
         
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 def create_vendor_breakdown(df_vendors, month):
     """Vendor Expense Breakdown with color gradient for a specific month"""
@@ -380,7 +416,7 @@ def main():
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
-        df_monthly, df_wings, df_vendors, df_extra_income_breakdown = load_excel_from_github()
+        df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines = load_excel_from_github()
     
     if not df_monthly.empty:
             # Monthly Overview Table
@@ -542,10 +578,23 @@ def main():
                         total_received = wing_shop_data['Received'].sum()
                         total_difference = wing_shop_data['Difference'].sum()
                         
+                        # Get fine data for selected wing/shop
+                        wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy() if not df_fines.empty else pd.DataFrame()
+                        
+                        # Calculate total fines by vendor type
+                        total_hk_fine = wing_shop_fines['HK'].sum() if not wing_shop_fines.empty else 0
+                        total_quinteze_fine = wing_shop_fines['Quinteze'].sum() if not wing_shop_fines.empty else 0
+                        total_security_fine = wing_shop_fines['Security'].sum() if not wing_shop_fines.empty else 0
+                        total_stp_fine = wing_shop_fines['STP'].sum() if not wing_shop_fines.empty else 0
+                        total_fines = total_hk_fine + total_quinteze_fine + total_security_fine + total_stp_fine
+                        
+                        # Adjust pending amount by deducting fines
+                        adjusted_difference = total_difference - total_fines
+                        
                         # Display metrics
                         st.subheader(f"📊 {selected_wing_shop} - Summary")
                         
-                        metric_cols = st.columns(3)
+                        metric_cols = st.columns(4)
                         
                         with metric_cols[0]:
                             st.metric("Total To Be Received", f"₹{total_to_be:,.2f}")
@@ -554,13 +603,30 @@ def main():
                             st.metric("Total Received", f"₹{total_received:,.2f}")
                         
                         with metric_cols[2]:
-                            # Color code based on pending/excess
-                            if total_difference > 0:
-                                st.metric("Total Pending", f"₹{total_difference:,.2f}", delta=None, 
-                                         help="Amount still to be received")
+                            st.metric("Total Fines Deducted", f"₹{total_fines:,.2f}")
+                        
+                        with metric_cols[3]:
+                            # Color code based on pending/excess after deducting fines
+                            if adjusted_difference > 0:
+                                st.metric("Final Pending", f"₹{adjusted_difference:,.2f}", delta=None, 
+                                         help="Amount still to be received after fines")
                             else:
-                                st.metric("Total Excess", f"₹{abs(total_difference):,.2f}", delta=None,
-                                         help="Amount received extra")
+                                st.metric("Final Excess", f"₹{abs(adjusted_difference):,.2f}", delta=None,
+                                         help="Amount received extra after fines")
+                        
+                        # Display fine breakdown (only non-zero fines)
+                        if total_fines > 0:
+                            st.write("")  # Spacing
+                            with st.expander("📌 Fine Details by Vendor Type", expanded=True):
+                                fine_cols = st.columns(4)
+                                if total_hk_fine > 0:
+                                    fine_cols[0].metric("🏢 HK (Housekeeping)", f"₹{total_hk_fine:,.2f}")
+                                if total_quinteze_fine > 0:
+                                    fine_cols[1].metric("🔧 Quinteze", f"₹{total_quinteze_fine:,.2f}")
+                                if total_security_fine > 0:
+                                    fine_cols[2].metric("👮 Security", f"₹{total_security_fine:,.2f}")
+                                if total_stp_fine > 0:
+                                    fine_cols[3].metric("⚡ STP", f"₹{total_stp_fine:,.2f}")
                         
                         # Display detailed breakdown
                         st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
@@ -572,10 +638,52 @@ def main():
                         wing_shop_display['Month_Sort'] = wing_shop_display['Month'].map(month_order)
                         wing_shop_display = wing_shop_display.sort_values('Month_Sort')
                         wing_shop_display = wing_shop_display.drop('Month_Sort', axis=1)
+                        
+                        # Add fine data to the display
+                        wing_shop_display['Fine_Details'] = ''
+                        if not wing_shop_fines.empty:
+                            for idx, row in wing_shop_display.iterrows():
+                                month = row['Month']
+                                fine_row = wing_shop_fines[wing_shop_fines['Month'] == month]
+                                if not fine_row.empty:
+                                    fine_details = []
+                                    hk = fine_row['HK'].values[0]
+                                    quinteze = fine_row['Quinteze'].values[0]
+                                    security = fine_row['Security'].values[0]
+                                    stp = fine_row['STP'].values[0]
+                                    
+                                    if hk > 0:
+                                        fine_details.append(f"HK: ₹{hk:,.0f}")
+                                    if quinteze > 0:
+                                        fine_details.append(f"Q: ₹{quinteze:,.0f}")
+                                    if security > 0:
+                                        fine_details.append(f"Sec: ₹{security:,.0f}")
+                                    if stp > 0:
+                                        fine_details.append(f"STP: ₹{stp:,.0f}")
+                                    
+                                    if fine_details:
+                                        wing_shop_display.loc[idx, 'Fine_Details'] = ' | '.join(fine_details)
+                                    else:
+                                        wing_shop_display.loc[idx, 'Fine_Details'] = '-'
+                                else:
+                                    wing_shop_display.loc[idx, 'Fine_Details'] = '-'
+                        else:
+                            wing_shop_display['Fine_Details'] = '-'
+                        
+                        # Update the difference column to account for fines
+                        if not wing_shop_fines.empty:
+                            wing_shop_display['Adjusted_Difference'] = wing_shop_display.apply(
+                                lambda row: row['Difference'] - wing_shop_fines[wing_shop_fines['Month'] == row['Month']]['Total_Fine'].sum()
+                                if len(wing_shop_fines[wing_shop_fines['Month'] == row['Month']]) > 0 else row['Difference'],
+                                axis=1
+                            )
+                        else:
+                            wing_shop_display['Adjusted_Difference'] = wing_shop_display['Difference']
+                        
                         wing_shop_display = wing_shop_display.rename(columns={
                             'To_Be': 'To Be Received',
                             'Received': 'Actual Received',
-                            'Difference': 'Pending/Excess (-ve = Excess)'
+                            'Adjusted_Difference': 'Pending/Excess (-ve = Excess)'
                         })
                         
                         # Style the dataframe
@@ -587,7 +695,7 @@ def main():
                             else:
                                 return 'background-color: #ffffcc'  # Yellow for zero
                         
-                        styled_wing_shop_df = wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Pending/Excess (-ve = Excess)']].style.format({
+                        styled_wing_shop_df = wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']].style.format({
                             'To Be Received': '₹{:,.2f}',
                             'Actual Received': '₹{:,.2f}',
                             'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
