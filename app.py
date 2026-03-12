@@ -585,19 +585,14 @@ def main():
                         total_difference = wing_shop_data['Difference'].sum()
                         
                         # Get fine data for selected wing/shop
-                        # Map shop names to wing names for fine lookup
-                        # e.g., "A Shop" -> look for "A Wing" fines
-                        # "C Shop Total", "C Shop Rahul", "C Shop Sagar" -> look for "C Wing" fines
-                        fine_lookup_name = selected_wing_shop
-                        if 'Shop' in selected_wing_shop:
-                            # Extract the wing letter/identifier
-                            if selected_wing_shop.startswith('C Shop'):
-                                fine_lookup_name = 'C Wing'
-                            else:
-                                # For "A Shop", "B Shop", etc., replace "Shop" with "Wing"
-                                fine_lookup_name = selected_wing_shop.replace(' Shop', ' Wing')
+                        # ONLY show fines for Wings, NOT for shops
+                        wing_shop_fines = pd.DataFrame()  # Initialize as empty
                         
-                        wing_shop_fines = df_fines[df_fines['Wing'] == fine_lookup_name].copy() if not df_fines.empty else pd.DataFrame()
+                        # Only fetch fines if selecting a Wing (not a Shop)
+                        if 'Shop' not in selected_wing_shop:
+                            # This is a Wing, get its fine data
+                            wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy() if not df_fines.empty else pd.DataFrame()
+                        # If it's a Shop, wing_shop_fines stays empty (no fines for shops)
                         
                         # Calculate total fines by vendor type - directly from the fines data
                         if not wing_shop_fines.empty:
@@ -664,39 +659,39 @@ def main():
                         wing_shop_display = wing_shop_display.sort_values('Month_Sort')
                         wing_shop_display = wing_shop_display.drop('Month_Sort', axis=1)
                         
-                        # Add fine data to the display
+                        # Add fine data to the display (wings only)
                         wing_shop_display['Fine_Details'] = '-'
                         wing_shop_display['Fine_Amount'] = 0.0
                         
-                        # Populate fine details for each month
+                        # Populate fine details for each month from wing_shop_fines
                         if not wing_shop_fines.empty:
                             for idx, row in wing_shop_display.iterrows():
                                 month = row['Month']
-                                fine_rows = wing_shop_fines[wing_shop_fines['Month'] == month]
+                                # Get fine data for this month and wing
+                                fine_month_data = wing_shop_fines[wing_shop_fines['Month'] == month]
                                 
-                                if not fine_rows.empty and len(fine_rows) > 0:
-                                    fine_details = []
-                                    total_month_fine = 0.0
+                                if not fine_month_data.empty:
+                                    # Get the fine values for this month
+                                    hk = float(fine_month_data['HK'].iloc[0]) if not fine_month_data['HK'].isna().all() else 0
+                                    quinteze = float(fine_month_data['Quinteze'].iloc[0]) if not fine_month_data['Quinteze'].isna().all() else 0
+                                    security = float(fine_month_data['Security'].iloc[0]) if not fine_month_data['Security'].isna().all() else 0
+                                    stp = float(fine_month_data['STP'].iloc[0]) if not fine_month_data['STP'].isna().all() else 0
                                     
-                                    for _, fine_row in fine_rows.iterrows():
-                                        hk = float(fine_row['HK']) if pd.notna(fine_row['HK']) else 0
-                                        quinteze = float(fine_row['Quinteze']) if pd.notna(fine_row['Quinteze']) else 0
-                                        security = float(fine_row['Security']) if pd.notna(fine_row['Security']) else 0
-                                        stp = float(fine_row['STP']) if pd.notna(fine_row['STP']) else 0
-                                        
-                                        total_month_fine = total_month_fine + hk + quinteze + security + stp
-                                        
-                                        if hk > 0:
-                                            fine_details.append(f"HK: ₹{hk:,.0f}")
-                                        if quinteze > 0:
-                                            fine_details.append(f"Q: ₹{quinteze:,.0f}")
-                                        if security > 0:
-                                            fine_details.append(f"Sec: ₹{security:,.0f}")
-                                        if stp > 0:
-                                            fine_details.append(f"STP: ₹{stp:,.0f}")
+                                    total_month_fine = hk + quinteze + security + stp
                                     
-                                    if fine_details and len(fine_details) > 0:
-                                        wing_shop_display.at[idx, 'Fine_Details'] = ' | '.join(fine_details)
+                                    # Build fine details string
+                                    fine_details_list = []
+                                    if hk > 0:
+                                        fine_details_list.append(f"HK: ₹{hk:,.0f}")
+                                    if quinteze > 0:
+                                        fine_details_list.append(f"Q: ₹{quinteze:,.0f}")
+                                    if security > 0:
+                                        fine_details_list.append(f"Sec: ₹{security:,.0f}")
+                                    if stp > 0:
+                                        fine_details_list.append(f"STP: ₹{stp:,.0f}")
+                                    
+                                    if fine_details_list:
+                                        wing_shop_display.at[idx, 'Fine_Details'] = ' | '.join(fine_details_list)
                                         wing_shop_display.at[idx, 'Fine_Amount'] = total_month_fine
                         
                         # Update the difference column to account for fines
