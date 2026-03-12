@@ -699,11 +699,6 @@ def main():
                         # Update the difference column to account for fines
                         wing_shop_display['Adjusted_Difference'] = wing_shop_display['Difference'] - wing_shop_display['Fine_Amount']
                         
-                        # DEBUG
-                        st.write(f"DEBUG: wing_shop_fines empty = {wing_shop_fines.empty}")
-                        st.write(f"DEBUG: wing_shop_display Fine_Details values = {wing_shop_display['Fine_Details'].tolist()}")
-                        st.write(f"DEBUG: wing_shop_display Fine_Amount values = {wing_shop_display['Fine_Amount'].tolist()}")
-                        
                         wing_shop_display = wing_shop_display.rename(columns={
                             'To_Be': 'To Be Received',
                             'Received': 'Actual Received',
