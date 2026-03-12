@@ -634,20 +634,6 @@ def main():
                                 st.metric("Final Excess", f"₹{abs(adjusted_difference):,.2f}", delta=None,
                                          help="Amount received extra after fines")
                         
-                        # Display fine breakdown (only non-zero fines)
-                        if total_fines > 0:
-                            st.write("")  # Spacing
-                            with st.expander("📌 Fine Details by Vendor Type", expanded=True):
-                                fine_cols = st.columns(4)
-                                if total_hk_fine > 0:
-                                    fine_cols[0].metric("🏢 HK (Housekeeping)", f"₹{total_hk_fine:,.2f}")
-                                if total_quinteze_fine > 0:
-                                    fine_cols[1].metric("🔧 Quinteze", f"₹{total_quinteze_fine:,.2f}")
-                                if total_security_fine > 0:
-                                    fine_cols[2].metric("👮 Security", f"₹{total_security_fine:,.2f}")
-                                if total_stp_fine > 0:
-                                    fine_cols[3].metric("⚡ STP", f"₹{total_stp_fine:,.2f}")
-                        
                         # Display detailed breakdown
                         st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
                         
