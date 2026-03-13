@@ -620,6 +620,8 @@ def main():
                         
                         # Add Fine_Details column (only if this is a Wing with fine data)
                         wing_shop_display['Fine_Details'] = '-'
+                        wing_shop_display['Fine_Amount'] = 0.0
+                        
                         if not wing_shop_fines.empty:
                             for idx, row in wing_shop_display.iterrows():
                                 month = row['Month']
@@ -630,6 +632,9 @@ def main():
                                     quinteze = float(fine_row['Quinteze']) if pd.notna(fine_row['Quinteze']) else 0
                                     security = float(fine_row['Security']) if pd.notna(fine_row['Security']) else 0
                                     stp = float(fine_row['STP']) if pd.notna(fine_row['STP']) else 0
+                                    
+                                    total_month_fine = hk + quinteze + security + stp
+                                    
                                     fine_details_list = []
                                     if hk > 0:
                                         fine_details_list.append(f"HK: ₹{hk:,.0f}")
@@ -641,6 +646,10 @@ def main():
                                         fine_details_list.append(f"STP: ₹{stp:,.0f}")
                                     if fine_details_list:
                                         wing_shop_display.at[idx, 'Fine_Details'] = ' | '.join(fine_details_list)
+                                        wing_shop_display.at[idx, 'Fine_Amount'] = total_month_fine
+                        
+                        # Calculate adjusted pending/excess after deducting fines
+                        wing_shop_display['Pending/Excess (-ve = Excess)'] = wing_shop_display['Pending/Excess (-ve = Excess)'] - wing_shop_display['Fine_Amount']
                         
                         # Style the dataframe
                         def color_wing_shop_difference(val):
