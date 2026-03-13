@@ -102,9 +102,17 @@ def load_excel_data(file):
         for month_info in months_info:
             month = month_info['name']
             
-            # Get summary totals
-            to_be = df.iloc[month_info['summary_row'], 6] if pd.notna(df.iloc[month_info['summary_row'], 6]) else 0
-            received = df.iloc[month_info['summary_row'], 9] if pd.notna(df.iloc[month_info['summary_row'], 9]) else 0
+            # Get summary totals - try summary_row first, fallback to to_be_row if NaN (fixes Dec/Jan)
+            to_be = df.iloc[month_info['summary_row'], 6]
+            if pd.isna(to_be):
+                to_be = df.iloc[month_info['to_be_row'], 6]
+            to_be = float(to_be) if pd.notna(to_be) else 0
+            
+            received = df.iloc[month_info['summary_row'], 9]
+            if pd.isna(received):
+                received = df.iloc[month_info['received_row'], 9]
+            received = float(received) if pd.notna(received) else 0
+            
             expense = df.iloc[month_info['summary_row'], month_info['expense_col']] if pd.notna(df.iloc[month_info['summary_row'], month_info['expense_col']]) else 0
             extra_income = df.iloc[month_info['summary_row'], 18] if pd.notna(df.iloc[month_info['summary_row'], 18]) else 0
             
