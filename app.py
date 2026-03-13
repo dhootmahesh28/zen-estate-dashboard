@@ -50,24 +50,6 @@ st.markdown("""
     .data {
         text-align: center !important;
     }
-    
-    /* Additional CSS for Streamlit styled dataframes */
-    .st-dataframe {
-        text-align: center !important;
-    }
-    
-    /* Target all table elements */
-    table {
-        width: 100% !important;
-    }
-    
-    table tr td {
-        text-align: center !important;
-    }
-    
-    table tr th {
-        text-align: center !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -180,48 +162,6 @@ def load_excel_data(file):
         df_wings = pd.DataFrame(wing_data)
         df_vendors = pd.DataFrame(vendor_data) if vendor_data else pd.DataFrame()
         
-        # Extract Fine data by vendor type and wing/shop
-        # Fine header rows: Sep=1, Oct=20, Nov=36, Dec=53, Jan=68 (0-indexed)
-        # Fine columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
-        # Wing data rows: Start at header+2, end at header+11
-        fine_data = []
-        
-        fine_sections = [
-            {'month': 'Sep', 'header_row': 1, 'start': 3, 'end': 12},     # Rows 3-11
-            {'month': 'Oct', 'header_row': 20, 'start': 22, 'end': 31},   # Rows 22-30
-            {'month': 'Nov', 'header_row': 36, 'start': 38, 'end': 47},   # Rows 38-46
-            {'month': 'Dec', 'header_row': 53, 'start': 55, 'end': 64},   # Rows 55-63
-            {'month': 'Jan', 'header_row': 68, 'start': 70, 'end': 79}    # Rows 70-78 (actual Jan section starts at 86 for parking fines, so use 68-78)
-        ]
-        
-        for section in fine_sections:
-            for row_idx in range(section['start'], min(section['end'], len(df))):
-                wing = df.iloc[row_idx, 29]  # Col 29 = Wing
-                if pd.notna(wing) and isinstance(wing, str) and 'Wing' in str(wing):
-                    hk_fine = df.iloc[row_idx, 30]      # HK (Col 30)
-                    quinteze_fine = df.iloc[row_idx, 31]  # Quinteze (Col 31)
-                    security_fine = df.iloc[row_idx, 32]  # Security (Col 32)
-                    stp_fine = df.iloc[row_idx, 33]    # STP (Col 33)
-                    
-                    hk_fine = float(hk_fine) if pd.notna(hk_fine) and isinstance(hk_fine, (int, float)) else 0
-                    quinteze_fine = float(quinteze_fine) if pd.notna(quinteze_fine) and isinstance(quinteze_fine, (int, float)) else 0
-                    security_fine = float(security_fine) if pd.notna(security_fine) and isinstance(security_fine, (int, float)) else 0
-                    stp_fine = float(stp_fine) if pd.notna(stp_fine) and isinstance(stp_fine, (int, float)) else 0
-                    
-                    total_fine = hk_fine + quinteze_fine + security_fine + stp_fine
-                    
-                    fine_data.append({
-                        'Month': section['month'],
-                        'Wing': wing,
-                        'HK': hk_fine,
-                        'Quinteze': quinteze_fine,
-                        'Security': security_fine,
-                        'STP': stp_fine,
-                        'Total_Fine': total_fine
-                    })
-        
-        df_fines = pd.DataFrame(fine_data) if fine_data else pd.DataFrame()
-        
         # Extract Extra Income breakdown by source
         # Using specific rows: Sep=9, Oct=29, Nov=45, Dec=62, Jan=77 (Excel rows)
         # Columns: NBH=23(X), Lift=24(Y), Event=25(Z), Scrap=26(AA)
@@ -250,13 +190,53 @@ def load_excel_data(file):
                     'Scrap': float(scrap) if isinstance(scrap, (int, float)) else 0
                 })
         
-        df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
+        # Extract Fine data by vendor type and wing
+        # Fine columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
+        fine_data = []
+        
+        fine_sections = [
+            {'month': 'Sep', 'start': 3, 'end': 12},      # Rows 3-11
+            {'month': 'Oct', 'start': 22, 'end': 31},     # Rows 22-30
+            {'month': 'Nov', 'start': 38, 'end': 47},     # Rows 38-46
+            {'month': 'Dec', 'start': 55, 'end': 64},     # Rows 55-63
+            {'month': 'Jan', 'start': 70, 'end': 79}      # Rows 70-78
+        ]
+        
+        for section in fine_sections:
+            for row_idx in range(section['start'], min(section['end'], len(df))):
+                wing = df.iloc[row_idx, 29]  # Col 29 = Wing
+                if pd.notna(wing) and isinstance(wing, str) and 'Wing' in str(wing):
+                    hk_fine = df.iloc[row_idx, 30]
+                    quinteze_fine = df.iloc[row_idx, 31]
+                    security_fine = df.iloc[row_idx, 32]
+                    stp_fine = df.iloc[row_idx, 33]
+                    
+                    hk_fine = float(hk_fine) if pd.notna(hk_fine) and isinstance(hk_fine, (int, float)) else 0
+                    quinteze_fine = float(quinteze_fine) if pd.notna(quinteze_fine) and isinstance(quinteze_fine, (int, float)) else 0
+                    security_fine = float(security_fine) if pd.notna(security_fine) and isinstance(security_fine, (int, float)) else 0
+                    stp_fine = float(stp_fine) if pd.notna(stp_fine) and isinstance(stp_fine, (int, float)) else 0
+                    
+                    total_fine = hk_fine + quinteze_fine + security_fine + stp_fine
+                    
+                    fine_data.append({
+                        'Month': section['month'],
+                        'Wing': wing,
+                        'HK': hk_fine,
+                        'Quinteze': quinteze_fine,
+                        'Security': security_fine,
+                        'STP': stp_fine,
+                        'Total_Fine': total_fine
+                    })
+        
+        df_fines = pd.DataFrame(fine_data) if fine_data else pd.DataFrame()
+        
+                df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
         
         return df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines
         
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 def create_vendor_breakdown(df_vendors, month):
     """Vendor Expense Breakdown with color gradient for a specific month"""
@@ -422,7 +402,7 @@ def main():
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
-        df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines = load_excel_from_github()
+        df_monthly, df_wings, df_vendors, df_extra_income_breakdown = load_excel_from_github()
     
     if not df_monthly.empty:
             # Monthly Overview Table
@@ -447,8 +427,7 @@ def main():
                 }).set_properties(**{
                     'text-align': 'center'
                 }).set_table_styles([
-                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold'), ('padding', '12px'), ('font-size', '1.1rem')]},
-                    {'selector': 'td', 'props': [('text-align', 'center'), ('padding', '10px'), ('font-size', '1rem')]}
+                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
                 ]),
                 use_container_width=True
             )
@@ -614,7 +593,7 @@ def main():
                         # Display metrics
                         st.subheader(f"📊 {selected_wing_shop} - Summary")
                         
-                        metric_cols = st.columns(4)
+                        metric_cols = st.columns(3)
                         
                         with metric_cols[0]:
                             st.metric("Total To Be Received", f"₹{total_to_be:,.2f}")
@@ -638,13 +617,7 @@ def main():
                         st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
                         
                         wing_shop_display = wing_shop_data.copy()
-                        
-                        # Create a custom sort order for months
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
-                        wing_shop_display['Month_Sort'] = wing_shop_display['Month'].map(month_order)
-                        wing_shop_display = wing_shop_display.sort_values('Month_Sort')
-                        wing_shop_display = wing_shop_display.drop('Month_Sort', axis=1)
-                        
+                        wing_shop_display = wing_shop_display.sort_values('Month')
                         # Add fine data to the display (wings only)
                         wing_shop_display['Fine_Details'] = '-'
                         wing_shop_display['Fine_Amount'] = 0.0
