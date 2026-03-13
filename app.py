@@ -230,13 +230,13 @@ def load_excel_data(file):
         
         df_fines = pd.DataFrame(fine_data) if fine_data else pd.DataFrame()
         
-                df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
+        df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
         
         return df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines
         
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 def create_vendor_breakdown(df_vendors, month):
     """Vendor Expense Breakdown with color gradient for a specific month"""
