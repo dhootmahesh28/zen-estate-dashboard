@@ -590,20 +590,28 @@ def main():
                         with metric_cols[2]:
                             st.metric("Total Fines Deducted", f"₹{total_fines:,.2f}")
                         
+                        # Calculate adjusted difference (pending - fines)
+                        adjusted_difference = total_difference - total_fines
+                        
                         with metric_cols[3]:
-                            # Color code based on pending/excess
-                            if total_difference > 0:
-                                st.metric("Total Pending", f"₹{total_difference:,.2f}", delta=None, 
-                                         help="Amount still to be received")
+                            # Color code based on pending/excess (after deducting fines)
+                            if adjusted_difference > 0:
+                                st.metric("Total Pending", f"₹{adjusted_difference:,.2f}", delta=None, 
+                                         help="Amount still to be received after fines")
                             else:
-                                st.metric("Total Excess", f"₹{abs(total_difference):,.2f}", delta=None,
-                                         help="Amount received extra")
+                                st.metric("Total Excess", f"₹{abs(adjusted_difference):,.2f}", delta=None,
+                                         help="Amount received extra after fines")
                         
                         # Display detailed breakdown
                         st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
                         
                         wing_shop_display = wing_shop_data.copy()
-                        wing_shop_display = wing_shop_display.sort_values('Month')
+                        # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
+                        wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
+                        wing_shop_display = wing_shop_display.sort_values('month_sort')
+                        wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
+                        
                         wing_shop_display = wing_shop_display.rename(columns={
                             'To_Be': 'To Be Received',
                             'Received': 'Actual Received',
