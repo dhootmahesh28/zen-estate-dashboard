@@ -651,20 +651,19 @@ def main():
                         # Calculate adjusted pending/excess after deducting fines
                         wing_shop_display['Pending/Excess (-ve = Excess)'] = wing_shop_display['Pending/Excess (-ve = Excess)'] - wing_shop_display['Fine_Amount']
                         
-                        # Style the dataframe
-                        def color_wing_shop_difference(val):
-                            if val < 0:
-                                return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
-                            elif val > 0:
-                                return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
-                            else:
-                                return 'background-color: #ffffcc'  # Yellow for zero
-                        
                         styled_wing_shop_df = wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']].style.format({
                             'To Be Received': '₹{:,.2f}',
                             'Actual Received': '₹{:,.2f}',
                             'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
-                        }).applymap(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
+                        }).apply(
+                            lambda x: [
+                                'background-color: #ccffcc; font-weight: bold' if val < 0 
+                                else 'background-color: #ffcccc; font-weight: bold' if val > 0 
+                                else 'background-color: #ffffcc' 
+                                for val in x
+                            ] if x.name == 'Pending/Excess (-ve = Excess)' else [''] * len(x),
+                            axis=0
+                        )
                         
                         styled_wing_shop_df = styled_wing_shop_df.set_properties(**{
                             'text-align': 'center'
