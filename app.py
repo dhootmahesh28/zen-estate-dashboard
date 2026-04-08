@@ -739,15 +739,17 @@ def main():
                 }).apply(highlight_months, axis=1)
                 
                 # Apply difference color coding on top of month backgrounds
-                def color_difference(val):
-                    if val < 0:
-                        return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
-                    elif val > 0:
-                        return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
-                    else:
-                        return ''
+                def color_difference(x):
+                    if x.name == 'Difference':
+                        return [
+                            'background-color: #ccffcc; font-weight: bold' if val < 0
+                            else 'background-color: #ffcccc; font-weight: bold' if val > 0
+                            else ''
+                            for val in x
+                        ]
+                    return [''] * len(x)
                 
-                styled_df = styled_df.applymap(color_difference, subset=['Difference'])
+                styled_df = styled_df.apply(color_difference, axis=0)
                 
                 # Add center alignment and header styling
                 styled_df = styled_df.set_properties(**{
