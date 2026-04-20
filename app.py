@@ -194,27 +194,49 @@ def load_excel_data(file):
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
         
-        # Extract Fine data by vendor type and wing
-        # Fine sections: Sep at row 1, Oct at 20, Nov at 36, Dec at 53, Jan at 68 (Excel rows)
-        # Columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
+        # Extract Fine data from NEW STRUCTURED format
+        # Structure: Row X = "Fine" header, Row X+1 = Vendors header with wing names
+        # Rows X+2-X+5 = HK, Quinteze, Security, STP with values for each wing
+        # Row X+6 = Total row
+        # Columns: Col 30-38 contain the data
         fine_data = []
         
         fine_sections = [
-            {'month': 'Sep', 'start': 3, 'end': 12},      # Rows 3-11
-            {'month': 'Oct', 'start': 22, 'end': 31},     # Rows 22-30
-            {'month': 'Nov', 'start': 38, 'end': 47},     # Rows 38-46
-            {'month': 'Dec', 'start': 55, 'end': 64},     # Rows 55-63
-            {'month': 'Jan', 'start': 70, 'end': 79}      # Rows 70-78
+            {'month': 'Sep', 'header_row': 1},      # Rows 1-7
+            {'month': 'Oct', 'header_row': 20},     # Rows 20-26
+            {'month': 'Nov', 'header_row': 36},     # Rows 36-42
+            {'month': 'Dec', 'header_row': 53},     # Rows 53-59
+            {'month': 'Jan', 'header_row': 68}      # Rows 68-74
         ]
         
         for section in fine_sections:
-            for row_idx in range(section['start'], min(section['end'], len(df))):
-                wing = df.iloc[row_idx, 29]  # Col 29 = Wing
-                if pd.notna(wing) and isinstance(wing, str) and 'Wing' in str(wing):
-                    hk_fine = df.iloc[row_idx, 30]
-                    quinteze_fine = df.iloc[row_idx, 31]
-                    security_fine = df.iloc[row_idx, 32]
-                    stp_fine = df.iloc[row_idx, 33]
+            header_row = section['header_row']
+            month = section['month']
+            
+            # Get wing names from header row (row after "Fine")
+            wing_header_row = header_row + 1
+            if wing_header_row < len(df):
+                # Columns 31-38 contain wing names
+                wings = []
+                for col in range(31, 39):  # Cols 31-38
+                    wing_name = df.iloc[wing_header_row, col]
+                    if pd.notna(wing_name) and isinstance(wing_name, str) and 'Wing' in str(wing_name):
+                        wings.append((col, wing_name))
+                
+                # Extract fine data for each vendor type (HK, Quinteze, Security, STP)
+                vendor_rows = {
+                    'HK': header_row + 2,
+                    'Quinteze': header_row + 3,
+                    'Security': header_row + 4,
+                    'STP': header_row + 5
+                }
+                
+                # For each wing, collect all fine values
+                for col_idx, wing_name in wings:
+                    hk_fine = df.iloc[vendor_rows['HK'], col_idx] if vendor_rows['HK'] < len(df) else 0
+                    quinteze_fine = df.iloc[vendor_rows['Quinteze'], col_idx] if vendor_rows['Quinteze'] < len(df) else 0
+                    security_fine = df.iloc[vendor_rows['Security'], col_idx] if vendor_rows['Security'] < len(df) else 0
+                    stp_fine = df.iloc[vendor_rows['STP'], col_idx] if vendor_rows['STP'] < len(df) else 0
                     
                     hk_fine = float(hk_fine) if pd.notna(hk_fine) and isinstance(hk_fine, (int, float)) else 0
                     quinteze_fine = float(quinteze_fine) if pd.notna(quinteze_fine) and isinstance(quinteze_fine, (int, float)) else 0
@@ -224,8 +246,8 @@ def load_excel_data(file):
                     total_fine = hk_fine + quinteze_fine + security_fine + stp_fine
                     
                     fine_data.append({
-                        'Month': section['month'],
-                        'Wing': wing,
+                        'Month': month,
+                        'Wing': wing_name,
                         'HK': hk_fine,
                         'Quinteze': quinteze_fine,
                         'Security': security_fine,
@@ -676,6 +698,57 @@ def main():
                             styled_wing_shop_df,
                             use_container_width=True
                         )
+                        
+                        # Display detailed FINE BREAKDOWN if this wing has fines
+                        if not wing_shop_fines.empty:
+                            st.subheader(f"💰 {selected_wing_shop} - Fine Details Breakdown")
+                            
+                            # Create a detailed fine breakdown table
+                            fine_display = wing_shop_fines.copy()
+                            fine_display = fine_display[['Month', 'HK', 'Quinteze', 'Security', 'STP', 'Total_Fine']]
+                            
+                            # Format and style the fine table
+                            styled_fine_df = fine_display.style.format({
+                                'HK': '₹{:,.2f}',
+                                'Quinteze': '₹{:,.2f}',
+                                'Security': '₹{:,.2f}',
+                                'STP': '₹{:,.2f}',
+                                'Total_Fine': '₹{:,.2f}'
+                            }).apply(
+                                lambda x: [
+                                    'background-color: #ffe6e6; font-weight: bold' if val > 0 
+                                    else ''
+                                    for val in x
+                                ] if x.name in ['HK', 'Quinteze', 'Security', 'STP', 'Total_Fine'] else [''] * len(x),
+                                axis=0
+                            )
+                            
+                            styled_fine_df = styled_fine_df.set_properties(**{
+                                'text-align': 'center'
+                            }).set_table_styles([
+                                {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#d32f2f'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1rem'), ('padding', '12px')]},
+                                {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '0.95rem')]}
+                            ])
+                            
+                            st.dataframe(
+                                styled_fine_df,
+                                use_container_width=True
+                            )
+                            
+                            # Show summary statistics
+                            fine_summary_cols = st.columns(4)
+                            with fine_summary_cols[0]:
+                                hk_total = wing_shop_fines['HK'].sum()
+                                st.metric("HK Fines", f"₹{hk_total:,.2f}")
+                            with fine_summary_cols[1]:
+                                quinteze_total = wing_shop_fines['Quinteze'].sum()
+                                st.metric("Quinteze Fines", f"₹{quinteze_total:,.2f}")
+                            with fine_summary_cols[2]:
+                                security_total = wing_shop_fines['Security'].sum()
+                                st.metric("Security Fines", f"₹{security_total:,.2f}")
+                            with fine_summary_cols[3]:
+                                stp_total = wing_shop_fines['STP'].sum()
+                                st.metric("STP Fines", f"₹{stp_total:,.2f}")
                     else:
                         st.warning(f"No data available for {selected_wing_shop}")
             
