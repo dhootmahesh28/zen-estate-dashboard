@@ -195,25 +195,28 @@ def load_excel_data(file):
         df_vendors = pd.DataFrame(vendor_data) if vendor_data else pd.DataFrame()
         
         # Extract Extra Income breakdown by source
-        # Using specific rows: Sep=9, Oct=29, Nov=45, Dec=62, Jan=77 (Excel rows)
-        # Columns: NBH=23(X), Lift=24(Y), Event=25(Z), Scrap=26(AA)
+        # Breakdown rows are: Summary Row + 1
+        # Columns: NBH=23, Lift=24, Event=25, Scrap=26, Parking_Fine=27, Clubhouse_Booking=28
         extra_income_breakdown = []
         
-        month_rows = {
-            'Sep': 8,   # Row 9 in Excel = index 8
-            'Oct': 28,  # Row 29 in Excel = index 28
-            'Nov': 44,  # Row 45 in Excel = index 44
-            'Dec': 61,  # Row 62 in Excel = index 61
-            'Jan': 76   # Row 77 in Excel = index 76
+        breakdown_month_rows = {
+            'Sep': 15,   # Row 15 in Excel = index 14 + 1
+            'Oct': 35,   # Row 35 in Excel = index 34 + 1
+            'Nov': 51,   # Row 51 in Excel = index 50 + 1
+            'Dec': 68,   # Row 68 in Excel = index 67 + 1
+            'Jan': 83,   # Row 83 in Excel = index 82 + 1
+            'Feb': 101,  # Row 101 in Excel = index 100 + 1
+            'Mar': 117   # Row 117 in Excel = index 116 + 1
         }
         
-        for month, row_idx in month_rows.items():
+        for month, row_idx in breakdown_month_rows.items():
             if row_idx < len(df):
                 nbh = df.iloc[row_idx, 23] if pd.notna(df.iloc[row_idx, 23]) else 0
                 lift = df.iloc[row_idx, 24] if pd.notna(df.iloc[row_idx, 24]) else 0
                 event = df.iloc[row_idx, 25] if pd.notna(df.iloc[row_idx, 25]) else 0
                 scrap = df.iloc[row_idx, 26] if pd.notna(df.iloc[row_idx, 26]) else 0
                 parking_fine = df.iloc[row_idx, 27] if pd.notna(df.iloc[row_idx, 27]) else 0
+                clubhouse_booking = df.iloc[row_idx, 28] if pd.notna(df.iloc[row_idx, 28]) else 0
                 
                 extra_income_breakdown.append({
                     'Month': month,
@@ -221,7 +224,8 @@ def load_excel_data(file):
                     'Lift': float(lift) if isinstance(lift, (int, float)) else 0,
                     'Event': float(event) if isinstance(event, (int, float)) else 0,
                     'Scrap': float(scrap) if isinstance(scrap, (int, float)) else 0,
-                    'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0
+                    'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0,
+                    'Clubhouse_Booking': float(clubhouse_booking) if isinstance(clubhouse_booking, (int, float)) else 0
                 })
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
@@ -556,24 +560,30 @@ def main():
                 # Create a formatted dataframe
                 breakdown_display = df_extra_income_breakdown.copy()
                 
-                # Add total column (including all 6 fields)
-                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'Clubhouse_Booking']].sum(axis=1)
+                # Check which columns exist and add total only if breakdown columns exist
+                breakdown_cols = []
+                for col in ['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'Clubhouse_Booking']:
+                    if col in breakdown_display.columns:
+                        breakdown_cols.append(col)
                 
-                # Display as table
-                st.dataframe(
-                    breakdown_display.style.format({
-                        'NBH': '₹{:,.2f}',
-                        'Lift': '₹{:,.2f}',
-                        'Event': '₹{:,.2f}',
-                        'Scrap': '₹{:,.2f}',
-                        'Parking_Fine': '₹{:,.2f}',
-                        'Clubhouse_Booking': '₹{:,.2f}',
-                        'Total': '₹{:,.2f}'
-                    }).set_properties(**{
-                        'text-align': 'center'
-                    }).set_table_styles([
-                        {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
-                    ]),
+                # Add total column only if we have breakdown columns
+                if breakdown_cols:
+                    breakdown_display['Total'] = breakdown_display[breakdown_cols].sum(axis=1)
+                    
+                    # Display columns: Month + breakdown columns + Total
+                    display_cols = ['Month'] + breakdown_cols + ['Total']
+                    # Filter to only columns that exist
+                    display_cols = [col for col in display_cols if col in breakdown_display.columns]
+                    
+                    # Format dictionary
+                    format_dict = {col: '₹{:,.2f}' for col in display_cols if col != 'Month'}
+                    
+                    st.dataframe(
+                        breakdown_display[display_cols].style.format(format_dict).set_properties(**{
+                            'text-align': 'center'
+                        }).set_table_styles([
+                            {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                        ]),
                     use_container_width=True
                 )
             
