@@ -92,7 +92,9 @@ def load_excel_data(file):
             {'name': 'Oct', 'to_be_row': 29, 'received_row': 28, 'diff_row': 30, 'summary_row': 34, 'expense_col': 15},
             {'name': 'Nov', 'to_be_row': 45, 'received_row': 44, 'diff_row': 46, 'summary_row': 50, 'expense_col': 15},
             {'name': 'Dec', 'to_be_row': 62, 'received_row': 61, 'diff_row': 63, 'summary_row': 67, 'expense_col': 15},
-            {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15}
+            {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15},
+            {'name': 'Feb', 'to_be_col': 6, 'received_col': 9, 'diff_col': 12, 'summary_row': 100, 'expense_col': 15},
+            {'name': 'Mar', 'to_be_col': 6, 'received_col': 9, 'diff_col': 12, 'summary_row': 116, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -101,28 +103,58 @@ def load_excel_data(file):
         
         for month_info in months_info:
             month = month_info['name']
+            summary_row = month_info['summary_row']
             
-            # Get summary totals
-            to_be = df.iloc[month_info['summary_row'], 6] if pd.notna(df.iloc[month_info['summary_row'], 6]) else 0
-            received = df.iloc[month_info['summary_row'], 9] if pd.notna(df.iloc[month_info['summary_row'], 9]) else 0
-            expense = df.iloc[month_info['summary_row'], month_info['expense_col']] if pd.notna(df.iloc[month_info['summary_row'], month_info['expense_col']]) else 0
-            extra_income = df.iloc[month_info['summary_row'], 18] if pd.notna(df.iloc[month_info['summary_row'], 18]) else 0
+            # Get summary totals - works for all months
+            to_be = df.iloc[summary_row, 6] if pd.notna(df.iloc[summary_row, 6]) else 0
+            received = df.iloc[summary_row, 9] if pd.notna(df.iloc[summary_row, 9]) else 0
+            expense = df.iloc[summary_row, month_info['expense_col']] if pd.notna(df.iloc[summary_row, month_info['expense_col']]) else 0
+            extra_income = df.iloc[summary_row, 18] if pd.notna(df.iloc[summary_row, 18]) else 0
+            
+            # Extract extra income breakdown (6 fields)
+            breakdown_row = summary_row + 1  # Row after summary
+            extra_income_details = {
+                'NBH': 0,
+                'Lift': 0,
+                'Event': 0,
+                'Scrap': 0,
+                'Parking_Fine': 0,
+                'Clubhouse_Booking': 0
+            }
+            
+            # Try to get values from breakdown row (cols 23-28)
+            if breakdown_row < len(df):
+                extra_income_details['NBH'] = float(df.iloc[breakdown_row, 23]) if pd.notna(df.iloc[breakdown_row, 23]) and isinstance(df.iloc[breakdown_row, 23], (int, float)) else 0
+                extra_income_details['Lift'] = float(df.iloc[breakdown_row, 24]) if pd.notna(df.iloc[breakdown_row, 24]) and isinstance(df.iloc[breakdown_row, 24], (int, float)) else 0
+                extra_income_details['Event'] = float(df.iloc[breakdown_row, 25]) if pd.notna(df.iloc[breakdown_row, 25]) and isinstance(df.iloc[breakdown_row, 25], (int, float)) else 0
+                extra_income_details['Scrap'] = float(df.iloc[breakdown_row, 26]) if pd.notna(df.iloc[breakdown_row, 26]) and isinstance(df.iloc[breakdown_row, 26], (int, float)) else 0
+                extra_income_details['Parking_Fine'] = float(df.iloc[breakdown_row, 27]) if pd.notna(df.iloc[breakdown_row, 27]) and isinstance(df.iloc[breakdown_row, 27], (int, float)) else 0
+                extra_income_details['Clubhouse_Booking'] = float(df.iloc[breakdown_row, 28]) if pd.notna(df.iloc[breakdown_row, 28]) and isinstance(df.iloc[breakdown_row, 28], (int, float)) else 0
             
             monthly_data.append({
                 'Month': month,
                 'To_Be': float(to_be),
                 'Received': float(received),
                 'Expense': float(expense),
-                'Extra_Income': float(extra_income)
+                'Extra_Income': float(extra_income),
+                **extra_income_details  # Spread the breakdown details
             })
             
             # Get wing-wise data
             for idx, wing in enumerate(wings):
                 col_idx = 6 + idx
                 if col_idx < df.shape[1]:
-                    to_be_val = df.iloc[month_info['to_be_row'], col_idx]
-                    received_val = df.iloc[month_info['received_row'], col_idx]
-                    diff_val = df.iloc[month_info['diff_row'], col_idx]
+                    # Sep-Jan use row indices, Feb-Mar use column indices from summary row
+                    if 'to_be_row' in month_info:
+                        to_be_val = df.iloc[month_info['to_be_row'], col_idx]
+                        received_val = df.iloc[month_info['received_row'], col_idx]
+                        diff_val = df.iloc[month_info['diff_row'], col_idx]
+                    else:
+                        # Feb-Mar: extract from summary row using column indices
+                        to_be_val = df.iloc[summary_row, month_info['to_be_col']] if month_info['to_be_col'] == col_idx else 0
+                        received_val = df.iloc[summary_row, month_info['received_col']] if month_info['received_col'] == col_idx else 0
+                        diff_val = df.iloc[summary_row, month_info['diff_col']] if month_info['diff_col'] == col_idx else 0
+                    
                     
                     wing_data.append({
                         'Month': month,
@@ -206,7 +238,9 @@ def load_excel_data(file):
             {'month': 'Oct', 'header_row': 20},     # Rows 20-26
             {'month': 'Nov', 'header_row': 36},     # Rows 36-42
             {'month': 'Dec', 'header_row': 53},     # Rows 53-59
-            {'month': 'Jan', 'header_row': 68}      # Rows 68-74
+            {'month': 'Jan', 'header_row': 68},     # Rows 68-74
+            {'month': 'Feb', 'header_row': 86},     # Rows 86-92 (Feb Vendor Bills)
+            {'month': 'Mar', 'header_row': 102}     # Rows 102-108 (Mar Vendor Bills)
         ]
         
         for section in fine_sections:
@@ -216,12 +250,12 @@ def load_excel_data(file):
             # Get wing names from header row (row after "Fine")
             wing_header_row = header_row + 1
             if wing_header_row < len(df):
-                # Columns 31-38 contain wing names
-                wings = []
-                for col in range(31, 39):  # Cols 31-38
+                # Columns 31-44 contain wing and shop names (9 wings + 5 shops)
+                wings_shops = []
+                for col in range(31, 45):  # Extended range to include shops (A-E Shop)
                     wing_name = df.iloc[wing_header_row, col]
-                    if pd.notna(wing_name) and isinstance(wing_name, str) and 'Wing' in str(wing_name):
-                        wings.append((col, wing_name))
+                    if pd.notna(wing_name) and isinstance(wing_name, str) and ('Wing' in str(wing_name) or 'Shop' in str(wing_name)):
+                        wings_shops.append((col, wing_name))
                 
                 # Extract fine data for each vendor type (HK, Quinteze, Security, STP)
                 vendor_rows = {
@@ -231,8 +265,8 @@ def load_excel_data(file):
                     'STP': header_row + 5
                 }
                 
-                # For each wing, collect all fine values
-                for col_idx, wing_name in wings:
+                # For each wing/shop, collect all fine values
+                for col_idx, wing_name in wings_shops:
                     hk_fine = df.iloc[vendor_rows['HK'], col_idx] if vendor_rows['HK'] < len(df) else 0
                     quinteze_fine = df.iloc[vendor_rows['Quinteze'], col_idx] if vendor_rows['Quinteze'] < len(df) else 0
                     security_fine = df.iloc[vendor_rows['Security'], col_idx] if vendor_rows['Security'] < len(df) else 0
@@ -522,8 +556,8 @@ def main():
                 # Create a formatted dataframe
                 breakdown_display = df_extra_income_breakdown.copy()
                 
-                # Add total column (including Parking_Fine)
-                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine']].sum(axis=1)
+                # Add total column (including all 6 fields)
+                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'Clubhouse_Booking']].sum(axis=1)
                 
                 # Display as table
                 st.dataframe(
@@ -533,6 +567,7 @@ def main():
                         'Event': '₹{:,.2f}',
                         'Scrap': '₹{:,.2f}',
                         'Parking_Fine': '₹{:,.2f}',
+                        'Clubhouse_Booking': '₹{:,.2f}',
                         'Total': '₹{:,.2f}'
                     }).set_properties(**{
                         'text-align': 'center'
