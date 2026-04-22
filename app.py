@@ -81,14 +81,10 @@ def load_excel_data(file):
     try:
         df = pd.read_excel(file, sheet_name='Sheet1', header=None)
         
-        # Wing names and their column indices
-        # Mapping: wing_name -> col_idx
-        wing_col_map = {
-            'A Wing': 6, 'A Shop': 7, 'B Wing': 8, 'B Shop': 9, 'C Wing': 10, 'C Shop Total': 11,
-            'D Wing': 14, 'D Shop': 15, 'E Wing': 16, 'E Shop': 17, 
-            'F Wing': 18, 'G Wing': 19, 'H Wing': 20, 'I Wing': 21
-        }
-        wings = list(wing_col_map.keys())
+        # Wing names from columns 6-21
+        wings = ['A Wing', 'A Shop', 'B Wing', 'B Shop', 'C Wing', 'C Shop Total', 
+                 'C Shop Rahul', 'C Shop Sagar', 'D Wing', 'D Shop', 'E Wing', 'E Shop', 
+                 'F Wing', 'G Wing', 'H Wing', 'I Wing']
         
         # Extract monthly data
         months_info = [
@@ -96,9 +92,7 @@ def load_excel_data(file):
             {'name': 'Oct', 'to_be_row': 29, 'received_row': 28, 'diff_row': 30, 'summary_row': 34, 'expense_col': 15},
             {'name': 'Nov', 'to_be_row': 45, 'received_row': 44, 'diff_row': 46, 'summary_row': 50, 'expense_col': 15},
             {'name': 'Dec', 'to_be_row': 62, 'received_row': 61, 'diff_row': 63, 'summary_row': 67, 'expense_col': 15},
-            {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15},
-            {'name': 'Feb', 'to_be_col': 6, 'received_col': 9, 'diff_col': 12, 'summary_row': 100, 'expense_col': 15},
-            {'name': 'Mar', 'to_be_col': 6, 'received_col': 9, 'diff_col': 12, 'summary_row': 116, 'expense_col': 15}
+            {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -107,49 +101,28 @@ def load_excel_data(file):
         
         for month_info in months_info:
             month = month_info['name']
-            summary_row = month_info['summary_row']
             
-            # Get summary totals - works for all months
-            to_be = df.iloc[summary_row, 6] if pd.notna(df.iloc[summary_row, 6]) else 0
-            received = df.iloc[summary_row, 9] if pd.notna(df.iloc[summary_row, 9]) else 0
-            expense = df.iloc[summary_row, month_info['expense_col']] if pd.notna(df.iloc[summary_row, month_info['expense_col']]) else 0
-            extra_income = df.iloc[summary_row, 18] if pd.notna(df.iloc[summary_row, 18]) else 0
-            
-            # Extract extra income from column 18 (the actual total)
-            # No breakdown data exists in the sheet yet - all 6 fields are 0
-            extra_income_details = {
-                'NBH': 0.0,
-                'Lift': 0.0,
-                'Event': 0.0,
-                'Scrap': 0.0,
-                'Parking_Fine': 0.0,
-                'Clubhouse_Booking': 0.0
-            }
+            # Get summary totals
+            to_be = df.iloc[month_info['summary_row'], 6] if pd.notna(df.iloc[month_info['summary_row'], 6]) else 0
+            received = df.iloc[month_info['summary_row'], 9] if pd.notna(df.iloc[month_info['summary_row'], 9]) else 0
+            expense = df.iloc[month_info['summary_row'], month_info['expense_col']] if pd.notna(df.iloc[month_info['summary_row'], month_info['expense_col']]) else 0
+            extra_income = df.iloc[month_info['summary_row'], 18] if pd.notna(df.iloc[month_info['summary_row'], 18]) else 0
             
             monthly_data.append({
                 'Month': month,
                 'To_Be': float(to_be),
                 'Received': float(received),
                 'Expense': float(expense),
-                'Extra_Income': float(extra_income),
-                **extra_income_details  # Spread the breakdown details
+                'Extra_Income': float(extra_income)
             })
             
             # Get wing-wise data
-            for wing in wings:
-                col_idx = wing_col_map[wing]  # Use mapping instead of enumeration
+            for idx, wing in enumerate(wings):
+                col_idx = 6 + idx
                 if col_idx < df.shape[1]:
-                    # Sep-Jan use row indices, Feb-Mar use summary row values
-                    if 'to_be_row' in month_info:
-                        to_be_val = df.iloc[month_info['to_be_row'], col_idx]
-                        received_val = df.iloc[month_info['received_row'], col_idx]
-                        diff_val = df.iloc[month_info['diff_row'], col_idx]
-                    else:
-                        # Feb-Mar: Use summary row values (same for all wings since no per-wing breakdown)
-                        to_be_val = df.iloc[summary_row, month_info['to_be_col']]
-                        received_val = df.iloc[summary_row, month_info['received_col']]
-                        diff_val = df.iloc[summary_row, month_info['diff_col']]
-                    
+                    to_be_val = df.iloc[month_info['to_be_row'], col_idx]
+                    received_val = df.iloc[month_info['received_row'], col_idx]
+                    diff_val = df.iloc[month_info['diff_row'], col_idx]
                     
                     wing_data.append({
                         'Month': month,
@@ -168,9 +141,7 @@ def load_excel_data(file):
             {'month': 'Oct', 'start': 22, 'end': 36},    # Oct vendor rows  
             {'month': 'Nov', 'start': 38, 'end': 52},    # Nov vendor rows
             {'month': 'Dec', 'start': 55, 'end': 68},    # Dec vendor rows
-            {'month': 'Jan', 'start': 70, 'end': 85},    # Jan vendor rows
-            {'month': 'Feb', 'start': 88, 'end': 101},   # Feb vendor rows ✨ NEW
-            {'month': 'Mar', 'start': 104, 'end': 118}   # Mar vendor rows ✨ NEW
+            {'month': 'Jan', 'start': 70, 'end': 85}     # Jan vendor rows
         ]
         
         for section in vendor_sections:
@@ -192,28 +163,25 @@ def load_excel_data(file):
         df_vendors = pd.DataFrame(vendor_data) if vendor_data else pd.DataFrame()
         
         # Extract Extra Income breakdown by source
-        # Breakdown rows are: Summary Row + 1
-        # Columns: NBH=23, Lift=24, Event=25, Scrap=26, Parking_Fine=27, Clubhouse_Booking=28
+        # Using specific rows: Sep=9, Oct=29, Nov=45, Dec=62, Jan=77 (Excel rows)
+        # Columns: NBH=23(X), Lift=24(Y), Event=25(Z), Scrap=26(AA)
         extra_income_breakdown = []
         
-        breakdown_month_rows = {
-            'Sep': 15,   # Row 15 in Excel = index 14 + 1
-            'Oct': 35,   # Row 35 in Excel = index 34 + 1
-            'Nov': 51,   # Row 51 in Excel = index 50 + 1
-            'Dec': 68,   # Row 68 in Excel = index 67 + 1
-            'Jan': 83,   # Row 83 in Excel = index 82 + 1
-            'Feb': 101,  # Row 101 in Excel = index 100 + 1
-            'Mar': 117   # Row 117 in Excel = index 116 + 1
+        month_rows = {
+            'Sep': 8,   # Row 9 in Excel = index 8
+            'Oct': 28,  # Row 29 in Excel = index 28
+            'Nov': 44,  # Row 45 in Excel = index 44
+            'Dec': 61,  # Row 62 in Excel = index 61
+            'Jan': 76   # Row 77 in Excel = index 76
         }
         
-        for month, row_idx in breakdown_month_rows.items():
+        for month, row_idx in month_rows.items():
             if row_idx < len(df):
                 nbh = df.iloc[row_idx, 23] if pd.notna(df.iloc[row_idx, 23]) else 0
                 lift = df.iloc[row_idx, 24] if pd.notna(df.iloc[row_idx, 24]) else 0
                 event = df.iloc[row_idx, 25] if pd.notna(df.iloc[row_idx, 25]) else 0
                 scrap = df.iloc[row_idx, 26] if pd.notna(df.iloc[row_idx, 26]) else 0
                 parking_fine = df.iloc[row_idx, 27] if pd.notna(df.iloc[row_idx, 27]) else 0
-                clubhouse_booking = df.iloc[row_idx, 28] if pd.notna(df.iloc[row_idx, 28]) else 0
                 
                 extra_income_breakdown.append({
                     'Month': month,
@@ -221,57 +189,32 @@ def load_excel_data(file):
                     'Lift': float(lift) if isinstance(lift, (int, float)) else 0,
                     'Event': float(event) if isinstance(event, (int, float)) else 0,
                     'Scrap': float(scrap) if isinstance(scrap, (int, float)) else 0,
-                    'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0,
-                    'Clubhouse_Booking': float(clubhouse_booking) if isinstance(clubhouse_booking, (int, float)) else 0
+                    'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0
                 })
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
         
-        # Extract Fine data from NEW STRUCTURED format
-        # Structure: Row X = "Fine" header, Row X+1 = Vendors header with wing names
-        # Rows X+2-X+5 = HK, Quinteze, Security, STP with values for each wing
-        # Row X+6 = Total row
-        # Columns: Col 30-38 contain the data
+        # Extract Fine data by vendor type and wing
+        # Fine sections: Sep at row 1, Oct at 20, Nov at 36, Dec at 53, Jan at 68 (Excel rows)
+        # Columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
         fine_data = []
         
         fine_sections = [
-            {'month': 'Sep', 'header_row': 1},      # Rows 1-7
-            {'month': 'Oct', 'header_row': 20},     # Rows 20-26
-            {'month': 'Nov', 'header_row': 36},     # Rows 36-42
-            {'month': 'Dec', 'header_row': 53},     # Rows 53-59
-            {'month': 'Jan', 'header_row': 68},     # Rows 68-74
-            {'month': 'Feb', 'header_row': 86},     # Rows 86-92 (Feb Vendor Bills)
-            {'month': 'Mar', 'header_row': 102}     # Rows 102-108 (Mar Vendor Bills)
+            {'month': 'Sep', 'start': 3, 'end': 12},      # Rows 3-11
+            {'month': 'Oct', 'start': 22, 'end': 31},     # Rows 22-30
+            {'month': 'Nov', 'start': 38, 'end': 47},     # Rows 38-46
+            {'month': 'Dec', 'start': 55, 'end': 64},     # Rows 55-63
+            {'month': 'Jan', 'start': 70, 'end': 79}      # Rows 70-78
         ]
         
         for section in fine_sections:
-            header_row = section['header_row']
-            month = section['month']
-            
-            # Get wing names from header row (row after "Fine")
-            wing_header_row = header_row + 1
-            if wing_header_row < len(df):
-                # Columns 31-44 contain wing and shop names (9 wings + 5 shops)
-                wings_shops = []
-                for col in range(31, 45):  # Extended range to include shops (A-E Shop)
-                    wing_name = df.iloc[wing_header_row, col]
-                    if pd.notna(wing_name) and isinstance(wing_name, str) and ('Wing' in str(wing_name) or 'Shop' in str(wing_name)):
-                        wings_shops.append((col, wing_name))
-                
-                # Extract fine data for each vendor type (HK, Quinteze, Security, STP)
-                vendor_rows = {
-                    'HK': header_row + 2,
-                    'Quinteze': header_row + 3,
-                    'Security': header_row + 4,
-                    'STP': header_row + 5
-                }
-                
-                # For each wing/shop, collect all fine values
-                for col_idx, wing_name in wings_shops:
-                    hk_fine = df.iloc[vendor_rows['HK'], col_idx] if vendor_rows['HK'] < len(df) else 0
-                    quinteze_fine = df.iloc[vendor_rows['Quinteze'], col_idx] if vendor_rows['Quinteze'] < len(df) else 0
-                    security_fine = df.iloc[vendor_rows['Security'], col_idx] if vendor_rows['Security'] < len(df) else 0
-                    stp_fine = df.iloc[vendor_rows['STP'], col_idx] if vendor_rows['STP'] < len(df) else 0
+            for row_idx in range(section['start'], min(section['end'], len(df))):
+                wing = df.iloc[row_idx, 29]  # Col 29 = Wing
+                if pd.notna(wing) and isinstance(wing, str) and 'Wing' in str(wing):
+                    hk_fine = df.iloc[row_idx, 30]
+                    quinteze_fine = df.iloc[row_idx, 31]
+                    security_fine = df.iloc[row_idx, 32]
+                    stp_fine = df.iloc[row_idx, 33]
                     
                     hk_fine = float(hk_fine) if pd.notna(hk_fine) and isinstance(hk_fine, (int, float)) else 0
                     quinteze_fine = float(quinteze_fine) if pd.notna(quinteze_fine) and isinstance(quinteze_fine, (int, float)) else 0
@@ -281,8 +224,8 @@ def load_excel_data(file):
                     total_fine = hk_fine + quinteze_fine + security_fine + stp_fine
                     
                     fine_data.append({
-                        'Month': month,
-                        'Wing': wing_name,
+                        'Month': section['month'],
+                        'Wing': wing,
                         'HK': hk_fine,
                         'Quinteze': quinteze_fine,
                         'Security': security_fine,
@@ -458,7 +401,7 @@ def create_wing_difference_chart(df_wings):
     return fig
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Mar 2026)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Jan 2026)</h1>', unsafe_allow_html=True)
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
@@ -529,16 +472,6 @@ def main():
                 fig_jan = create_vendor_breakdown(df_vendors, 'Jan')
                 if fig_jan:
                     st.plotly_chart(fig_jan, use_container_width=True)
-                
-                # February ✨ NEW
-                fig_feb = create_vendor_breakdown(df_vendors, 'Feb')
-                if fig_feb:
-                    st.plotly_chart(fig_feb, use_container_width=True)
-                
-                # March ✨ NEW
-                fig_mar = create_vendor_breakdown(df_vendors, 'Mar')
-                if fig_mar:
-                    st.plotly_chart(fig_mar, use_container_width=True)
             
             # Extra Income
             st.markdown("""
@@ -567,30 +500,23 @@ def main():
                 # Create a formatted dataframe
                 breakdown_display = df_extra_income_breakdown.copy()
                 
-                # Check which columns exist and add total only if breakdown columns exist
-                breakdown_cols = []
-                for col in ['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'Clubhouse_Booking']:
-                    if col in breakdown_display.columns:
-                        breakdown_cols.append(col)
+                # Add total column (including Parking_Fine)
+                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine']].sum(axis=1)
                 
-                # Add total column only if we have breakdown columns
-                if breakdown_cols:
-                    breakdown_display['Total'] = breakdown_display[breakdown_cols].sum(axis=1)
-                    
-                    # Display columns: Month + breakdown columns + Total
-                    display_cols = ['Month'] + breakdown_cols + ['Total']
-                    # Filter to only columns that exist
-                    display_cols = [col for col in display_cols if col in breakdown_display.columns]
-                    
-                    # Format dictionary
-                    format_dict = {col: '₹{:,.2f}' for col in display_cols if col != 'Month'}
-                    
-                    st.dataframe(
-                        breakdown_display[display_cols].style.format(format_dict).set_properties(**{
-                            'text-align': 'center'
-                        }).set_table_styles([
-                            {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
-                        ]),
+                # Display as table
+                st.dataframe(
+                    breakdown_display.style.format({
+                        'NBH': '₹{:,.2f}',
+                        'Lift': '₹{:,.2f}',
+                        'Event': '₹{:,.2f}',
+                        'Scrap': '₹{:,.2f}',
+                        'Parking_Fine': '₹{:,.2f}',
+                        'Total': '₹{:,.2f}'
+                    }).set_properties(**{
+                        'text-align': 'center'
+                    }).set_table_styles([
+                        {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                    ]),
                     use_container_width=True
                 )
             
@@ -604,9 +530,7 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
             if not df_wings.empty:
-                # Filter out C Shop Rahul and C Shop Sagar before creating chart
-                df_wings_filtered = df_wings[~df_wings['Wing'].isin(['C Shop Rahul', 'C Shop Sagar'])]
-                fig4 = create_wing_difference_chart(df_wings_filtered)
+                fig4 = create_wing_difference_chart(df_wings)
                 if fig4:
                     st.plotly_chart(fig4, use_container_width=True)
             
@@ -623,9 +547,6 @@ def main():
             if not df_wings.empty:
                 # Get unique wings and shops - sorted
                 all_wings_shops = sorted(df_wings['Wing'].unique())
-                
-                # Remove C Shop Rahul and C Shop Sagar (they have no data)
-                all_wings_shops = [w for w in all_wings_shops if w not in ['C Shop Rahul', 'C Shop Sagar']]
                 
                 if all_wings_shops:
                     # Create columns for better layout
@@ -646,13 +567,14 @@ def main():
                         total_received = wing_shop_data['Received'].sum()
                         total_difference = wing_shop_data['Difference'].sum()
                         
-                        # Get fine data for selected wing/shop
+                        # Get fine data for selected wing (ONLY if it's a Wing, NOT a Shop)
                         wing_shop_fines = pd.DataFrame()
                         total_fines = 0
-                        # Extract fine data for both wings AND shops ✨
-                        wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy() if not df_fines.empty else pd.DataFrame()
-                        if not wing_shop_fines.empty:
-                            total_fines = wing_shop_fines['Total_Fine'].sum()
+                        if 'Shop' not in selected_wing_shop:
+                            # This is a Wing, get its fine data
+                            wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy() if not df_fines.empty else pd.DataFrame()
+                            if not wing_shop_fines.empty:
+                                total_fines = wing_shop_fines['Total_Fine'].sum()
                         
                         # Display metrics
                         st.subheader(f"📊 {selected_wing_shop} - Summary")
@@ -685,7 +607,7 @@ def main():
                         
                         wing_shop_display = wing_shop_data.copy()
                         # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
                         wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                         wing_shop_display = wing_shop_display.sort_values('month_sort')
                         wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
@@ -729,20 +651,20 @@ def main():
                         # Calculate adjusted pending/excess after deducting fines
                         wing_shop_display['Pending/Excess (-ve = Excess)'] = wing_shop_display['Pending/Excess (-ve = Excess)'] - wing_shop_display['Fine_Amount']
                         
+                        # Style the dataframe
+                        def color_wing_shop_difference(val):
+                            if val < 0:
+                                return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
+                            elif val > 0:
+                                return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
+                            else:
+                                return 'background-color: #ffffcc'  # Yellow for zero
+                        
                         styled_wing_shop_df = wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']].style.format({
                             'To Be Received': '₹{:,.2f}',
                             'Actual Received': '₹{:,.2f}',
                             'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
-                        }).apply(
-                            lambda x: [
-                                'background-color: #ccffcc; font-weight: bold' if isinstance(val, (int, float)) and val < 0
-                                else 'background-color: #ffcccc; font-weight: bold' if isinstance(val, (int, float)) and val > 0 
-                                else 'background-color: #ffffcc' if isinstance(val, (int, float)) and val == 0
-                                else ''
-                                for val in x
-                            ] if x.name == 'Pending/Excess (-ve = Excess)' else [''] * len(x),
-                            axis=0
-                        )
+                        }).applymap(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
                         
                         styled_wing_shop_df = styled_wing_shop_df.set_properties(**{
                             'text-align': 'center'
@@ -755,57 +677,6 @@ def main():
                             styled_wing_shop_df,
                             use_container_width=True
                         )
-                        
-                        # Display detailed FINE BREAKDOWN if this wing has fines
-                        if not wing_shop_fines.empty:
-                            st.subheader(f"💰 {selected_wing_shop} - Fine Details Breakdown")
-                            
-                            # Create a detailed fine breakdown table
-                            fine_display = wing_shop_fines.copy()
-                            fine_display = fine_display[['Month', 'HK', 'Quinteze', 'Security', 'STP', 'Total_Fine']]
-                            
-                            # Format and style the fine table
-                            styled_fine_df = fine_display.style.format({
-                                'HK': '₹{:,.2f}',
-                                'Quinteze': '₹{:,.2f}',
-                                'Security': '₹{:,.2f}',
-                                'STP': '₹{:,.2f}',
-                                'Total_Fine': '₹{:,.2f}'
-                            }).apply(
-                                lambda x: [
-                                    'background-color: #ffe6e6; font-weight: bold' if val > 0 
-                                    else ''
-                                    for val in x
-                                ] if x.name in ['HK', 'Quinteze', 'Security', 'STP', 'Total_Fine'] else [''] * len(x),
-                                axis=0
-                            )
-                            
-                            styled_fine_df = styled_fine_df.set_properties(**{
-                                'text-align': 'center'
-                            }).set_table_styles([
-                                {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#d32f2f'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1rem'), ('padding', '12px')]},
-                                {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '0.95rem')]}
-                            ])
-                            
-                            st.dataframe(
-                                styled_fine_df,
-                                use_container_width=True
-                            )
-                            
-                            # Show summary statistics
-                            fine_summary_cols = st.columns(4)
-                            with fine_summary_cols[0]:
-                                hk_total = wing_shop_fines['HK'].sum()
-                                st.metric("HK Fines", f"₹{hk_total:,.2f}")
-                            with fine_summary_cols[1]:
-                                quinteze_total = wing_shop_fines['Quinteze'].sum()
-                                st.metric("Quinteze Fines", f"₹{quinteze_total:,.2f}")
-                            with fine_summary_cols[2]:
-                                security_total = wing_shop_fines['Security'].sum()
-                                st.metric("Security Fines", f"₹{security_total:,.2f}")
-                            with fine_summary_cols[3]:
-                                stp_total = wing_shop_fines['STP'].sum()
-                                st.metric("STP Fines", f"₹{stp_total:,.2f}")
                     else:
                         st.warning(f"No data available for {selected_wing_shop}")
             
@@ -824,11 +695,8 @@ def main():
                 # Format the dataframe for better display
                 detailed_breakdown = df_wings.copy()
                 
-                # Remove C Shop Rahul and C Shop Sagar (they have no data)
-                detailed_breakdown = detailed_breakdown[~detailed_breakdown['Wing'].isin(['C Shop Rahul', 'C Shop Sagar'])]
-                
                 # Create a custom sort order for months
-                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
+                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
                 
                 # Sort by Month FIRST (chronologically), then Wing (alphabetically)
@@ -872,17 +740,15 @@ def main():
                 }).apply(highlight_months, axis=1)
                 
                 # Apply difference color coding on top of month backgrounds
-                def color_difference(x):
-                    if x.name == 'Difference':
-                        return [
-                            'background-color: #ccffcc; font-weight: bold' if val < 0
-                            else 'background-color: #ffcccc; font-weight: bold' if val > 0
-                            else ''
-                            for val in x
-                        ]
-                    return [''] * len(x)
+                def color_difference(val):
+                    if val < 0:
+                        return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
+                    elif val > 0:
+                        return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
+                    else:
+                        return ''
                 
-                styled_df = styled_df.apply(color_difference, axis=0)
+                styled_df = styled_df.applymap(color_difference, subset=['Difference'])
                 
                 # Add center alignment and header styling
                 styled_df = styled_df.set_properties(**{
