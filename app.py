@@ -148,16 +148,16 @@ def load_excel_data(file):
             for wing in wings:
                 col_idx = wing_col_map[wing]  # Use mapping instead of enumeration
                 if col_idx < df.shape[1]:
-                    # Sep-Jan use row indices, Feb-Mar use column indices from summary row
+                    # Sep-Jan use row indices, Feb-Mar use summary row values
                     if 'to_be_row' in month_info:
                         to_be_val = df.iloc[month_info['to_be_row'], col_idx]
                         received_val = df.iloc[month_info['received_row'], col_idx]
                         diff_val = df.iloc[month_info['diff_row'], col_idx]
                     else:
-                        # Feb-Mar: extract from summary row using column indices
-                        to_be_val = df.iloc[summary_row, month_info['to_be_col']] if month_info['to_be_col'] == col_idx else 0
-                        received_val = df.iloc[summary_row, month_info['received_col']] if month_info['received_col'] == col_idx else 0
-                        diff_val = df.iloc[summary_row, month_info['diff_col']] if month_info['diff_col'] == col_idx else 0
+                        # Feb-Mar: Use summary row values (same for all wings since no per-wing breakdown)
+                        to_be_val = df.iloc[summary_row, month_info['to_be_col']]
+                        received_val = df.iloc[summary_row, month_info['received_col']]
+                        diff_val = df.iloc[summary_row, month_info['diff_col']]
                     
                     
                     wing_data.append({
