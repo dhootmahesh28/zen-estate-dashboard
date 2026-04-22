@@ -115,25 +115,16 @@ def load_excel_data(file):
             expense = df.iloc[summary_row, month_info['expense_col']] if pd.notna(df.iloc[summary_row, month_info['expense_col']]) else 0
             extra_income = df.iloc[summary_row, 18] if pd.notna(df.iloc[summary_row, 18]) else 0
             
-            # Extract extra income breakdown (6 fields)
-            breakdown_row = summary_row + 1  # Row after summary
+            # Extract extra income from column 18 (the actual total)
+            # No breakdown data exists in the sheet yet - all 6 fields are 0
             extra_income_details = {
-                'NBH': 0,
-                'Lift': 0,
-                'Event': 0,
-                'Scrap': 0,
-                'Parking_Fine': 0,
-                'Clubhouse_Booking': 0
+                'NBH': 0.0,
+                'Lift': 0.0,
+                'Event': 0.0,
+                'Scrap': 0.0,
+                'Parking_Fine': 0.0,
+                'Clubhouse_Booking': 0.0
             }
-            
-            # Try to get values from breakdown row (cols 23-28)
-            if breakdown_row < len(df):
-                extra_income_details['NBH'] = float(df.iloc[breakdown_row, 23]) if pd.notna(df.iloc[breakdown_row, 23]) and isinstance(df.iloc[breakdown_row, 23], (int, float)) else 0
-                extra_income_details['Lift'] = float(df.iloc[breakdown_row, 24]) if pd.notna(df.iloc[breakdown_row, 24]) and isinstance(df.iloc[breakdown_row, 24], (int, float)) else 0
-                extra_income_details['Event'] = float(df.iloc[breakdown_row, 25]) if pd.notna(df.iloc[breakdown_row, 25]) and isinstance(df.iloc[breakdown_row, 25], (int, float)) else 0
-                extra_income_details['Scrap'] = float(df.iloc[breakdown_row, 26]) if pd.notna(df.iloc[breakdown_row, 26]) and isinstance(df.iloc[breakdown_row, 26], (int, float)) else 0
-                extra_income_details['Parking_Fine'] = float(df.iloc[breakdown_row, 27]) if pd.notna(df.iloc[breakdown_row, 27]) and isinstance(df.iloc[breakdown_row, 27], (int, float)) else 0
-                extra_income_details['Clubhouse_Booking'] = float(df.iloc[breakdown_row, 28]) if pd.notna(df.iloc[breakdown_row, 28]) and isinstance(df.iloc[breakdown_row, 28], (int, float)) else 0
             
             monthly_data.append({
                 'Month': month,
