@@ -278,7 +278,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     # Set the year based on month
-    year = "2026" if month == "Jan" else "2025"
+    year = "2026" if month in ["Jan", "Feb", "Mar"] else "2025"
     
     fig.update_layout(
         title=f'Vendor Expense Breakdown ({month} {year})',
@@ -407,7 +407,7 @@ def create_wing_difference_chart(df_wings):
     return fig
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Jan 2026)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Mar 2026)</h1>', unsafe_allow_html=True)
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
@@ -613,7 +613,7 @@ def main():
                         
                         wing_shop_display = wing_shop_data.copy()
                         # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
                         wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                         wing_shop_display = wing_shop_display.sort_values('month_sort')
                         wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
@@ -670,7 +670,7 @@ def main():
                             'To Be Received': '₹{:,.2f}',
                             'Actual Received': '₹{:,.2f}',
                             'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
-                        }).applymap(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
+                        }).map(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
                         
                         styled_wing_shop_df = styled_wing_shop_df.set_properties(**{
                             'text-align': 'center'
@@ -702,7 +702,7 @@ def main():
                 detailed_breakdown = df_wings.copy()
                 
                 # Create a custom sort order for months
-                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5}
+                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
                 
                 # Sort by Month FIRST (chronologically), then Wing (alphabetically)
@@ -754,7 +754,7 @@ def main():
                     else:
                         return ''
                 
-                styled_df = styled_df.applymap(color_difference, subset=['Difference'])
+                styled_df = styled_df.map(color_difference, subset=['Difference'])
                 
                 # Add center alignment and header styling
                 styled_df = styled_df.set_properties(**{
