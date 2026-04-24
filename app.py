@@ -188,6 +188,7 @@ def load_excel_data(file):
                 event = df.iloc[row_idx, 25] if pd.notna(df.iloc[row_idx, 25]) else 0
                 scrap = df.iloc[row_idx, 26] if pd.notna(df.iloc[row_idx, 26]) else 0
                 parking_fine = df.iloc[row_idx, 27] if pd.notna(df.iloc[row_idx, 27]) else 0
+                clubhouse = df.iloc[row_idx, 28] if pd.notna(df.iloc[row_idx, 28]) else 0
                 
                 extra_income_breakdown.append({
                     'Month': month,
@@ -195,7 +196,8 @@ def load_excel_data(file):
                     'Lift': float(lift) if isinstance(lift, (int, float)) else 0,
                     'Event': float(event) if isinstance(event, (int, float)) else 0,
                     'Scrap': float(scrap) if isinstance(scrap, (int, float)) else 0,
-                    'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0
+                    'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0,
+                    'Clubhouse_Booking': float(clubhouse) if isinstance(clubhouse, (int, float)) else 0,
                 })
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
@@ -506,8 +508,8 @@ def main():
                 # Create a formatted dataframe
                 breakdown_display = df_extra_income_breakdown.copy()
                 
-                # Add total column (including Parking_Fine)
-                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine']].sum(axis=1)
+                # Add total column (all 6 income sources)
+                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'Clubhouse_Booking']].sum(axis=1)
                 
                 # Display as table
                 st.dataframe(
@@ -517,6 +519,7 @@ def main():
                         'Event': '₹{:,.2f}',
                         'Scrap': '₹{:,.2f}',
                         'Parking_Fine': '₹{:,.2f}',
+                        'Clubhouse_Booking': '₹{:,.2f}',
                         'Total': '₹{:,.2f}'
                     }).set_properties(**{
                         'text-align': 'center'
