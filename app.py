@@ -202,46 +202,58 @@ def load_excel_data(file):
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
         
-        # Extract Fine data by vendor type and wing
-        # Fine sections: Sep at row 1, Oct at 20, Nov at 36, Dec at 53, Jan at 68 (Excel rows)
-        # Columns: Col 29=Wing, Col 30=HK, Col 31=Quinteze, Col 32=Security, Col 33=STP
-        fine_data = []
+        # Extract Fine data
+        # Structure: Col 30 = Vendor name (HK/Quinteze/Security/STP)
+        # Cols 31-44 = Wing/Shop amounts: 31=A Wing, 32=B Wing, 33=C Wing, 34=D Wing,
+        #              35=E Wing, 36=F Wing, 37=G Wing, 38=H Wing, 39=I Wing,
+        #              40=A Shop, 41=B Shop, 42=C Shop Total, 43=D Shop, 44=E Shop
+        # Each month: Vendors header row, then +1=HK, +2=Quinteze, +3=Security, +4=STP
+        
+        fine_col_map = {
+            31: 'A Wing', 32: 'B Wing', 33: 'C Wing', 34: 'D Wing', 35: 'E Wing',
+            36: 'F Wing', 37: 'G Wing', 38: 'H Wing', 39: 'I Wing',
+            40: 'A Shop', 41: 'B Shop', 42: 'C Shop Total', 43: 'D Shop', 44: 'E Shop'
+        }
         
         fine_sections = [
-            {'month': 'Sep', 'start': 3, 'end': 12},      # Rows 3-11
-            {'month': 'Oct', 'start': 22, 'end': 31},     # Rows 22-30
-            {'month': 'Nov', 'start': 38, 'end': 47},     # Rows 38-46
-            {'month': 'Dec', 'start': 55, 'end': 64},     # Rows 55-63
-            {'month': 'Jan', 'start': 70, 'end': 79}      # Rows 70-78
+            {'month': 'Sep', 'vendor_row': 2},
+            {'month': 'Oct', 'vendor_row': 21},
+            {'month': 'Nov', 'vendor_row': 37},
+            {'month': 'Dec', 'vendor_row': 54},
+            {'month': 'Jan', 'vendor_row': 69},
+            {'month': 'Feb', 'vendor_row': 87},
+            {'month': 'Mar', 'vendor_row': 103},
         ]
         
-        for section in fine_sections:
-            for row_idx in range(section['start'], min(section['end'], len(df))):
-                wing = df.iloc[row_idx, 29]  # Col 29 = Wing
-                if pd.notna(wing) and isinstance(wing, str) and 'Wing' in str(wing):
-                    hk_fine = df.iloc[row_idx, 30]
-                    quinteze_fine = df.iloc[row_idx, 31]
-                    security_fine = df.iloc[row_idx, 32]
-                    stp_fine = df.iloc[row_idx, 33]
-                    
-                    hk_fine = float(hk_fine) if pd.notna(hk_fine) and isinstance(hk_fine, (int, float)) else 0
-                    quinteze_fine = float(quinteze_fine) if pd.notna(quinteze_fine) and isinstance(quinteze_fine, (int, float)) else 0
-                    security_fine = float(security_fine) if pd.notna(security_fine) and isinstance(security_fine, (int, float)) else 0
-                    stp_fine = float(stp_fine) if pd.notna(stp_fine) and isinstance(stp_fine, (int, float)) else 0
-                    
-                    total_fine = hk_fine + quinteze_fine + security_fine + stp_fine
-                    
-                    fine_data.append({
-                        'Month': section['month'],
-                        'Wing': wing,
-                        'HK': hk_fine,
-                        'Quinteze': quinteze_fine,
-                        'Security': security_fine,
-                        'STP': stp_fine,
-                        'Total_Fine': total_fine
-                    })
+        fine_data = {}  # keyed by (month, wing)
         
-        df_fines = pd.DataFrame(fine_data) if fine_data else pd.DataFrame()
+        for section in fine_sections:
+            month = section['month']
+            vr = section['vendor_row']
+            # Rows: vr+1=HK, vr+2=Quinteze, vr+3=Security, vr+4=STP
+            vendor_rows = {'HK': vr+1, 'Quinteze': vr+2, 'Security': vr+3, 'STP': vr+4}
+            
+            for vendor, row_idx in vendor_rows.items():
+                if row_idx >= len(df):
+                    continue
+                for col, wing in fine_col_map.items():
+                    if col >= df.shape[1]:
+                        continue
+                    val = df.iloc[row_idx, col]
+                    amount = float(val) if pd.notna(val) and isinstance(val, (int, float)) and val != 0 else 0
+                    if amount != 0:
+                        key = (month, wing)
+                        if key not in fine_data:
+                            fine_data[key] = {'Month': month, 'Wing': wing, 'HK': 0, 'Quinteze': 0, 'Security': 0, 'STP': 0}
+                        fine_data[key][vendor] += amount
+        
+        # Convert to dataframe
+        fine_rows = []
+        for key, row in fine_data.items():
+            row['Total_Fine'] = row['HK'] + row['Quinteze'] + row['Security'] + row['STP']
+            fine_rows.append(row)
+        
+        df_fines = pd.DataFrame(fine_rows) if fine_rows else pd.DataFrame()
         
         return df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines
         
@@ -704,6 +716,31 @@ def main():
                 # Format the dataframe for better display
                 detailed_breakdown = df_wings.copy()
                 
+                # Merge fine data into detailed breakdown
+                if not df_fines.empty:
+                    # Build a fine summary per (Wing, Month)
+                    fine_summary = df_fines[['Month', 'Wing', 'HK', 'Quinteze', 'Security', 'STP', 'Total_Fine']].copy()
+                    
+                    def format_fine_detail(row):
+                        parts = []
+                        if row['HK'] > 0:       parts.append(f"HK:₹{row['HK']:,.0f}")
+                        if row['Quinteze'] > 0:  parts.append(f"Q:₹{row['Quinteze']:,.0f}")
+                        if row['Security'] > 0:  parts.append(f"Sec:₹{row['Security']:,.0f}")
+                        if row['STP'] > 0:       parts.append(f"STP:₹{row['STP']:,.0f}")
+                        return ' | '.join(parts) if parts else '-'
+                    
+                    fine_summary['Fine_Details'] = fine_summary.apply(format_fine_detail, axis=1)
+                    fine_summary['Fine_Amount']  = fine_summary['Total_Fine']
+                    detailed_breakdown = detailed_breakdown.merge(
+                        fine_summary[['Month', 'Wing', 'Fine_Details', 'Fine_Amount']],
+                        on=['Month', 'Wing'], how='left'
+                    )
+                    detailed_breakdown['Fine_Details'] = detailed_breakdown['Fine_Details'].fillna('-')
+                    detailed_breakdown['Fine_Amount']  = detailed_breakdown['Fine_Amount'].fillna(0)
+                else:
+                    detailed_breakdown['Fine_Details'] = '-'
+                    detailed_breakdown['Fine_Amount']  = 0
+                
                 # Create a custom sort order for months
                 month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
@@ -738,11 +775,15 @@ def main():
                         return ['background-color: #ffe6f2'] * len(row)  # Light pink
                     elif month == 'Jan':
                         return ['background-color: #f2e6ff'] * len(row)  # Light purple
+                    elif month == 'Feb':
+                        return ['background-color: #e6fff9'] * len(row)  # Light teal
+                    elif month == 'Mar':
+                        return ['background-color: #fff9e6'] * len(row)  # Light yellow
                     else:
                         return [''] * len(row)
                 
                 # Apply styling
-                styled_df = detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Difference']].style.format({
+                styled_df = detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']].style.format({
                     'To Be Received': '₹{:,.2f}',
                     'Actual Received': '₹{:,.2f}',
                     'Difference': '₹{:,.2f}'
