@@ -588,12 +588,11 @@ def main():
                         total_received = wing_shop_data['Received'].sum()
                         total_difference = wing_shop_data['Difference'].sum()
                         
-                        # Get fine data for selected wing (ONLY if it's a Wing, NOT a Shop)
+                        # Get fine data for selected wing/shop
                         wing_shop_fines = pd.DataFrame()
                         total_fines = 0
-                        if 'Shop' not in selected_wing_shop:
-                            # This is a Wing, get its fine data
-                            wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy() if not df_fines.empty else pd.DataFrame()
+                        if not df_fines.empty:
+                            wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy()
                             if not wing_shop_fines.empty:
                                 total_fines = wing_shop_fines['Total_Fine'].sum()
                         
