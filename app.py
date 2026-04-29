@@ -53,7 +53,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+@st.cache_data(ttl=0)
 def load_excel_from_github():
     """Load Excel file directly from GitHub repository"""
     # GitHub raw file URL - UPDATE THIS with your actual file URL
@@ -75,7 +75,7 @@ def load_excel_from_github():
         st.info("Please make sure the Excel file is uploaded to your GitHub repository.")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-@st.cache_data
+@st.cache_data(ttl=0)
 def load_excel_data(file):
     """Load all financial data from Excel"""
     try:
