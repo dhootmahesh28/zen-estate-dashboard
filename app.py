@@ -172,13 +172,13 @@ def load_excel_data(file):
         extra_income_breakdown = []
         
         month_rows = {
-            'Sep': 8,   # Row 9 in Excel = index 8
-            'Oct': 28,  # Row 29 in Excel = index 28
-            'Nov': 44,  # Row 45 in Excel = index 44
-            'Dec': 61,  # Row 62 in Excel = index 61
-            'Jan': 76,  # Row 77 in Excel = index 76
-            'Feb': 88,  # Row 89 in Excel = index 88
-            'Mar': 104  # Row 105 in Excel = index 104
+            'Sep': 8,    # Total row for extra income breakdown
+            'Oct': 28,
+            'Nov': 44,
+            'Dec': 61,
+            'Jan': 76,
+            'Feb': 94,   # Row "Total Amount Received per Wing" for Feb (NOT row 88 which is just first data row)
+            'Mar': 110   # Row "Total Amount Received per Wing" for Mar (NOT row 104 which is just first data row)
         }
         
         for month, row_idx in month_rows.items():
