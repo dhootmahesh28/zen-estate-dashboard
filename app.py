@@ -94,7 +94,8 @@ def load_excel_data(file):
             {'name': 'Dec', 'to_be_row': 62, 'received_row': 61, 'diff_row': 63, 'summary_row': 67, 'expense_col': 15},
             {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15},
             {'name': 'Feb', 'to_be_row': 95, 'received_row': 94, 'diff_row': 96, 'summary_row': 100, 'expense_col': 15},
-            {'name': 'Mar', 'to_be_row': 111, 'received_row': 110, 'diff_row': 112, 'summary_row': 116, 'expense_col': 15}
+            {'name': 'Mar', 'to_be_row': 111, 'received_row': 110, 'diff_row': 112, 'summary_row': 116, 'expense_col': 15},
+            {'name': 'Apr', 'to_be_row': 128, 'received_row': 127, 'diff_row': 129, 'summary_row': 133, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -145,7 +146,8 @@ def load_excel_data(file):
             {'month': 'Dec', 'start': 55, 'end': 68},    # Dec vendor rows
             {'month': 'Jan', 'start': 70, 'end': 85},    # Jan vendor rows
             {'month': 'Feb', 'start': 88, 'end': 102},   # Feb vendor rows
-            {'month': 'Mar', 'start': 104, 'end': 118}   # Mar vendor rows
+            {'month': 'Mar', 'start': 104, 'end': 118},  # Mar vendor rows
+            {'month': 'Apr', 'start': 121, 'end': 133}   # Apr vendor rows
         ]
         
         for section in vendor_sections:
@@ -177,8 +179,9 @@ def load_excel_data(file):
             'Nov': 44,
             'Dec': 61,
             'Jan': 76,
-            'Feb': 94,   # Row "Total Amount Received per Wing" for Feb (NOT row 88 which is just first data row)
-            'Mar': 110   # Row "Total Amount Received per Wing" for Mar (NOT row 104 which is just first data row)
+            'Feb': 94,   # Total row for Feb
+            'Mar': 110,  # Total row for Mar
+            'Apr': 127   # Total row for Apr (Total Amount Received per Wing)
         }
         
         for month, row_idx in month_rows.items():
@@ -223,6 +226,7 @@ def load_excel_data(file):
             {'month': 'Jan', 'vendor_row': 69},
             {'month': 'Feb', 'vendor_row': 87},
             {'month': 'Mar', 'vendor_row': 103},
+            {'month': 'Apr', 'vendor_row': 120}
         ]
         
         fine_data = {}  # keyed by (month, wing)
@@ -292,7 +296,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     # Set the year based on month
-    year = "2026" if month in ["Jan", "Feb", "Mar"] else "2025"
+    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr"] else "2025"
     
     fig.update_layout(
         title=f'Vendor Expense Breakdown ({month} {year})',
@@ -421,7 +425,7 @@ def create_wing_difference_chart(df_wings):
     return fig
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Mar 2026)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Apr 2026)</h1>', unsafe_allow_html=True)
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
@@ -627,7 +631,7 @@ def main():
                         
                         wing_shop_display = wing_shop_data.copy()
                         # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8}
                         wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                         wing_shop_display = wing_shop_display.sort_values('month_sort')
                         wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
@@ -741,7 +745,7 @@ def main():
                     detailed_breakdown['Fine_Amount']  = 0
                 
                 # Create a custom sort order for months
-                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7}
+                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
                 
                 # Sort by Month FIRST (chronologically), then Wing (alphabetically)
@@ -778,6 +782,8 @@ def main():
                         return ['background-color: #e6fff9'] * len(row)  # Light teal
                     elif month == 'Mar':
                         return ['background-color: #fff9e6'] * len(row)  # Light yellow
+                    elif month == 'Apr':
+                        return ['background-color: #e6f9e6'] * len(row)  # Light green
                     else:
                         return [''] * len(row)
                 
