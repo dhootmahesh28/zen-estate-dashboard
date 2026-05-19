@@ -200,7 +200,7 @@ def load_excel_data(file):
                     'Event': float(event) if isinstance(event, (int, float)) else 0,
                     'Scrap': float(scrap) if isinstance(scrap, (int, float)) else 0,
                     'Parking_Fine': float(parking_fine) if isinstance(parking_fine, (int, float)) else 0,
-                    'Clubhouse_Booking': float(clubhouse) if isinstance(clubhouse, (int, float)) else 0,
+                    'ClubHouse_Booking & Gym': float(clubhouse) if isinstance(clubhouse, (int, float)) else 0,
                 })
         
         df_extra_income_breakdown = pd.DataFrame(extra_income_breakdown)
@@ -462,41 +462,6 @@ def main():
             st.markdown("---")
             
             # Vendor Breakdown - 5 separate charts for each month
-            if not df_vendors.empty:
-                st.markdown("""
-                    <div style='background: linear-gradient(90deg, #ff7f0e 0%, #d62728 100%); 
-                                color: white; padding: 15px; border-radius: 10px; 
-                                font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
-                                box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                        💼 Vendor Expense Breakdown (Month-wise)
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                # September
-                fig_sep = create_vendor_breakdown(df_vendors, 'Sep')
-                if fig_sep:
-                    st.plotly_chart(fig_sep, use_container_width=True)
-                
-                # October
-                fig_oct = create_vendor_breakdown(df_vendors, 'Oct')
-                if fig_oct:
-                    st.plotly_chart(fig_oct, use_container_width=True)
-                
-                # November
-                fig_nov = create_vendor_breakdown(df_vendors, 'Nov')
-                if fig_nov:
-                    st.plotly_chart(fig_nov, use_container_width=True)
-                
-                # December
-                fig_dec = create_vendor_breakdown(df_vendors, 'Dec')
-                if fig_dec:
-                    st.plotly_chart(fig_dec, use_container_width=True)
-                
-                # January
-                fig_jan = create_vendor_breakdown(df_vendors, 'Jan')
-                if fig_jan:
-                    st.plotly_chart(fig_jan, use_container_width=True)
-            
             # Extra Income
             st.markdown("""
                 <div style='background: linear-gradient(90deg, #9467bd 0%, #8c564b 100%); 
@@ -525,7 +490,7 @@ def main():
                 breakdown_display = df_extra_income_breakdown.copy()
                 
                 # Add total column (all 6 income sources)
-                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'Clubhouse_Booking']].sum(axis=1)
+                breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'ClubHouse_Booking & Gym']].sum(axis=1)
                 
                 # Display as table
                 st.dataframe(
@@ -535,7 +500,7 @@ def main():
                         'Event': '₹{:,.2f}',
                         'Scrap': '₹{:,.2f}',
                         'Parking_Fine': '₹{:,.2f}',
-                        'Clubhouse_Booking': '₹{:,.2f}',
+                        'ClubHouse_Booking & Gym': '₹{:,.2f}',
                         'Total': '₹{:,.2f}'
                     }).set_properties(**{
                         'text-align': 'center'
@@ -544,20 +509,6 @@ def main():
                     ]),
                     use_container_width=True
                 )
-            
-            # Wing/Shop Analysis
-            st.markdown("""
-                <div style='background: linear-gradient(90deg, #17becf 0%, #bcbd22 100%); 
-                            color: white; padding: 15px; border-radius: 10px; 
-                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                    🏘️ Pending/Excess Amount Received by Wing/Shop
-                </div>
-            """, unsafe_allow_html=True)
-            if not df_wings.empty:
-                fig4 = create_wing_difference_chart(df_wings)
-                if fig4:
-                    st.plotly_chart(fig4, use_container_width=True)
             
             # Wing/Shop Filter Section
             st.markdown("""
