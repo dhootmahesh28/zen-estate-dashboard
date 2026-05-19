@@ -581,6 +581,9 @@ def main():
                         st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
                         
                         wing_shop_display = wing_shop_data.copy()
+                        # Drop Wing column - not needed in per-wing breakdown table
+                        if 'Wing' in wing_shop_display.columns:
+                            wing_shop_display = wing_shop_display.drop('Wing', axis=1)
                         # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
                         month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8}
                         wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
