@@ -18,13 +18,15 @@ st.markdown("""
     .main-header {
         font-size: 2.2rem;
         font-weight: 700;
-        color: #fff;
+        color: #ffffff;
         text-align: center;
         padding: 1.2rem 1.5rem;
         border-radius: 16px;
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
         margin-bottom: 1.5rem;
         letter-spacing: 0.02em;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+        -webkit-text-fill-color: #ffffff;
     }
 
     /* ── Section headers ── */
