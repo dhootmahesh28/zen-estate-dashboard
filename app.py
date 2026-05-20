@@ -638,11 +638,25 @@ def main():
                             else:
                                 return 'background-color: #ffffcc'  # Yellow for zero
                         
+                        def highlight_wing_shop_months(row):
+                            colors = {
+                                'Sep': 'background-color: #cce5ff',
+                                'Oct': 'background-color: #ffe5cc',
+                                'Nov': 'background-color: #d9ccff',
+                                'Dec': 'background-color: #fff0b3',
+                                'Jan': 'background-color: #ffccdd',
+                                'Feb': 'background-color: #b3f0e0',
+                                'Mar': 'background-color: #fff3b3',
+                                'Apr': 'background-color: #ccf0cc',
+                            }
+                            bg = colors.get(row['Month'], '')
+                            return [bg] * len(row)
+                        
                         styled_wing_shop_df = wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']].style.format({
                             'To Be Received': '₹{:,.2f}',
                             'Actual Received': '₹{:,.2f}',
                             'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
-                        }).map(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
+                        }).apply(highlight_wing_shop_months, axis=1).map(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
                         
                         styled_wing_shop_df = styled_wing_shop_df.set_properties(**{
                             'text-align': 'center'
@@ -668,10 +682,13 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
             if not df_wings.empty:
-                st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop** *(Sorted by Wing/Shop name)*")
+                st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop** *(Sorted by Month)*")
                 
                 # Format the dataframe for better display
                 detailed_breakdown = df_wings.copy()
+                
+                # Remove C Shop Rahul and C Shop Sagar (no data)
+                detailed_breakdown = detailed_breakdown[~detailed_breakdown['Wing'].isin(['C Shop Rahul', 'C Shop Sagar'])]
                 
                 # Merge fine data into detailed breakdown
                 if not df_fines.empty:
@@ -718,28 +735,21 @@ def main():
                     'Received': 'Actual Received'
                 })
                 
-                # Create a function to apply alternating month backgrounds
+                # Create a function to apply month backgrounds
                 def highlight_months(row):
                     month = row['Month']
-                    # Assign background colors based on month
-                    if month == 'Sep':
-                        return ['background-color: #e6f2ff'] * len(row)  # Light blue
-                    elif month == 'Oct':
-                        return ['background-color: #fff4e6'] * len(row)  # Light orange
-                    elif month == 'Nov':
-                        return ['background-color: #e6ffe6'] * len(row)  # Light green
-                    elif month == 'Dec':
-                        return ['background-color: #ffe6f2'] * len(row)  # Light pink
-                    elif month == 'Jan':
-                        return ['background-color: #f2e6ff'] * len(row)  # Light purple
-                    elif month == 'Feb':
-                        return ['background-color: #e6fff9'] * len(row)  # Light teal
-                    elif month == 'Mar':
-                        return ['background-color: #fff9e6'] * len(row)  # Light yellow
-                    elif month == 'Apr':
-                        return ['background-color: #e6f9e6'] * len(row)  # Light green
-                    else:
-                        return [''] * len(row)
+                    colors = {
+                        'Sep': 'background-color: #cce5ff',   # Blue
+                        'Oct': 'background-color: #ffe5cc',   # Orange
+                        'Nov': 'background-color: #d9ccff',   # Purple
+                        'Dec': 'background-color: #fff0b3',   # Amber
+                        'Jan': 'background-color: #ffccdd',   # Pink
+                        'Feb': 'background-color: #b3f0e0',   # Teal
+                        'Mar': 'background-color: #fff3b3',   # Yellow
+                        'Apr': 'background-color: #ccf0cc',   # Green
+                    }
+                    bg = colors.get(month, '')
+                    return [bg] * len(row)
                 
                 # Apply styling
                 styled_df = detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']].style.format({
