@@ -11,45 +11,65 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+    /* ── Page background ── */
+    .stApp { background: #f4f6fa; }
+
+    /* ── Main title ── */
     .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #fff;
         text-align: center;
-        margin-bottom: 2rem;
+        padding: 1.2rem 1.5rem;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.02em;
     }
-    /* Center align all dataframe cells and headers - Multiple selectors for better compatibility */
+
+    /* ── Section headers ── */
+    .sec-header {
+        color: white;
+        padding: 11px 18px;
+        border-radius: 12px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 1.2rem 0 0.7rem 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .sec-blue   { background: linear-gradient(90deg, #185FA5, #378ADD); }
+    .sec-green  { background: linear-gradient(90deg, #3B6D11, #639922); }
+    .sec-purple { background: linear-gradient(90deg, #3C3489, #7F77DD); }
+    .sec-orange { background: linear-gradient(90deg, #993C1D, #D85A30); }
+    .sec-pink   { background: linear-gradient(90deg, #993556, #D4537E); }
+    .sec-teal   { background: linear-gradient(90deg, #0F6E56, #1D9E75); }
+
+    /* ── Metric cards ── */
+    .metric-row { display: flex; gap: 12px; margin-bottom: 1rem; }
+    .metric-card {
+        flex: 1;
+        border-radius: 12px;
+        padding: 14px 16px;
+        color: white;
+        min-width: 0;
+    }
+    .mc-blue   { background: linear-gradient(135deg, #185FA5, #378ADD); }
+    .mc-green  { background: linear-gradient(135deg, #3B6D11, #639922); }
+    .mc-amber  { background: linear-gradient(135deg, #854F0B, #BA7517); }
+    .mc-red    { background: linear-gradient(135deg, #A32D2D, #E24B4A); }
+    .metric-label { font-size: 0.7rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .metric-value { font-size: 1.35rem; font-weight: 600; }
+    .metric-sub   { font-size: 0.68rem; opacity: 0.75; margin-top: 3px; }
+
+    /* ── Dataframe headers ── */
     div[data-testid="stDataFrame"] table th,
-    div[data-testid="stDataFrame"] thead th,
-    .dataframe th,
-    .dataframe thead th {
-        text-align: center !important;
-        background-color: #1f77b4 !important;
-        color: white !important;
-        font-weight: bold !important;
-        padding: 12px !important;
-        font-size: 1.1rem !important;
-    }
+    .dataframe th { text-align: center !important; background-color: #1f77b4 !important; color: white !important; font-weight: bold !important; padding: 12px !important; font-size: 1.0rem !important; }
     div[data-testid="stDataFrame"] table td,
-    div[data-testid="stDataFrame"] tbody td,
-    .dataframe td,
-    .dataframe tbody td {
-        text-align: center !important;
-        padding: 10px !important;
-        font-size: 1rem !important;
-    }
-    /* Also target the styled dataframes */
-    .row_heading {
-        text-align: center !important;
-    }
-    .col_heading {
-        text-align: center !important;
-        background-color: #1f77b4 !important;
-        color: white !important;
-    }
-    .data {
-        text-align: center !important;
-    }
+    .dataframe td { text-align: center !important; padding: 10px !important; font-size: 1rem !important; }
+    .col_heading { text-align: center !important; background-color: #1f77b4 !important; color: white !important; }
+    .data { text-align: center !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -432,14 +452,40 @@ def main():
         df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines = load_excel_from_github()
     
     if not df_monthly.empty:
+            # Portfolio metric cards
+            st.markdown("<div class='sec-header sec-blue'>📊 Portfolio Overview</div>", unsafe_allow_html=True)
+            total_to_be   = df_monthly['To_Be'].sum()
+            total_received = df_monthly['Received'].sum()
+            total_fines_sum = df_fines['Total_Fine'].sum() if not df_fines.empty else 0
+            total_extra   = df_monthly['Extra_Income'].sum()
+            collection_pct = (total_received / total_to_be * 100) if total_to_be > 0 else 0
+            st.markdown(f"""
+                <div class='metric-row'>
+                  <div class='metric-card mc-blue'>
+                    <div class='metric-label'>Total to be received</div>
+                    <div class='metric-value'>₹{total_to_be/10000000:.2f} Cr</div>
+                    <div class='metric-sub'>Sep 2025 – Apr 2026</div>
+                  </div>
+                  <div class='metric-card mc-green'>
+                    <div class='metric-label'>Total received</div>
+                    <div class='metric-value'>₹{total_received/10000000:.2f} Cr</div>
+                    <div class='metric-sub'>{collection_pct:.1f}% collection rate</div>
+                  </div>
+                  <div class='metric-card mc-amber'>
+                    <div class='metric-label'>Total fines levied</div>
+                    <div class='metric-value'>₹{total_fines_sum:,.0f}</div>
+                    <div class='metric-sub'>Across all wings/shops</div>
+                  </div>
+                  <div class='metric-card mc-red'>
+                    <div class='metric-label'>Total extra income</div>
+                    <div class='metric-value'>₹{total_extra:,.0f}</div>
+                    <div class='metric-sub'>NBH, Events, Lift, Scrap etc.</div>
+                  </div>
+                </div>
+            """, unsafe_allow_html=True)
             # Monthly Overview Table
             st.markdown("""
-                <div style='background: linear-gradient(90deg, #1f77b4 0%, #2ca02c 100%); 
-                            color: white; padding: 15px; border-radius: 10px; 
-                            font-size: 1.8rem; font-weight: bold; margin-bottom: 1rem;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                    📊 Monthly Overview (To Be vs Received)
-                </div>
+                <div class='sec-header sec-blue'>📊 Monthly Overview — To Be vs Received</div>
             """, unsafe_allow_html=True)
             
             overview_data = df_monthly.copy()
@@ -464,12 +510,7 @@ def main():
             # Vendor Breakdown - 5 separate charts for each month
             # Extra Income
             st.markdown("""
-                <div style='background: linear-gradient(90deg, #9467bd 0%, #8c564b 100%); 
-                            color: white; padding: 15px; border-radius: 10px; 
-                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                    💰 Extra Income (Month-wise)
-                </div>
+                <div class='sec-header sec-purple'>💰 Extra Income — Month-wise</div>
             """, unsafe_allow_html=True)
             fig2 = create_extra_income_chart(df_monthly)
             if fig2:
@@ -478,12 +519,7 @@ def main():
             # Extra Income Breakdown by Source
             if not df_extra_income_breakdown.empty:
                 st.markdown("""
-                    <div style='background: linear-gradient(90deg, #e377c2 0%, #7f7f7f 100%); 
-                                color: white; padding: 12px; border-radius: 8px; 
-                                font-size: 1.4rem; font-weight: bold; margin-top: 1.5rem; margin-bottom: 1rem;
-                                box-shadow: 0 3px 5px rgba(0,0,0,0.1);'>
-                        📋 Extra Income Breakdown
-                    </div>
+                    <div class='sec-header sec-pink'>📋 Extra Income Breakdown</div>
                 """, unsafe_allow_html=True)
                 
                 # Create a formatted dataframe
@@ -511,14 +547,7 @@ def main():
                 )
             
             # Wing/Shop Filter Section
-            st.markdown("""
-                <div style='background: linear-gradient(90deg, #ff7f0e 0%, #d62728 100%); 
-                            color: white; padding: 15px; border-radius: 10px; 
-                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                    🏢 Wing/Shop-Wise Analysis
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown("<div class='sec-header sec-orange'>🏢 Wing / Shop-Wise Analysis</div>", unsafe_allow_html=True)
             
             if not df_wings.empty:
                 # Get unique wings and shops - sorted
@@ -673,14 +702,7 @@ def main():
                         st.warning(f"No data available for {selected_wing_shop}")
             
             # Detailed Wing/Shop Monthly Breakdown Table
-            st.markdown("""
-                <div style='background: linear-gradient(90deg, #2ca02c 0%, #1f77b4 100%); 
-                            color: white; padding: 15px; border-radius: 10px; 
-                            font-size: 1.8rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem;
-                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);'>
-                    📋 Wing/Shop Monthly Details
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown("<div class='sec-header sec-teal'>📋 Wing / Shop Monthly Details — All</div>", unsafe_allow_html=True)
             if not df_wings.empty:
                 st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop** *(Sorted by Month)*")
                 
