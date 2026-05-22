@@ -458,6 +458,79 @@ def create_wing_difference_chart(df_wings):
     
     return fig
 
+# Column header colours for each table type
+HEADER_COLORS = {
+    'default':              'linear-gradient(135deg,#1a1a6e,#1f77b4)',
+    'Month':                '#555555',
+    'Wing':                 '#555555',
+    'NBH':                  '#185FA5',
+    'Lift':                 '#7F77DD',
+    'Event':                '#1D9E75',
+    'Scrap':                '#BA7517',
+    'Parking_Fine':         '#D85A30',
+    'ClubHouse_Booking & Gym': '#D4537E',
+    'Total':                '#3B6D11',
+    'To Be Received':       '#185FA5',
+    'To_Be':                '#185FA5',
+    'Actual Received':      '#1D9E75',
+    'Received':             '#1D9E75',
+    'Difference':           '#A32D2D',
+    'Expense':              '#BA7517',
+    'Extra_Income':         '#D4537E',
+    'Fine_Details':         '#D85A30',
+    'Pending/Excess (-ve = Excess)': '#A32D2D',
+}
+
+MONTH_COLORS = {
+    'Sep': '#cce5ff', 'Oct': '#ffe5cc', 'Nov': '#d9ccff', 'Dec': '#fff0b3',
+    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc',
+}
+
+def render_html_table(df, fmt=None):
+    """Render a DataFrame as an HTML table with coloured headers and month row shading."""
+    fmt = fmt or {}
+    
+    # Build header row
+    th_cells = '<th style="padding:10px 14px;text-align:center;color:white;font-weight:bold;font-size:0.95rem;background:linear-gradient(135deg,#1a1a6e,#1f77b4);">&#8203;</th>'  # index col
+    for col in df.columns:
+        bg = HEADER_COLORS.get(col, HEADER_COLORS['default'])
+        th_cells += f'<th style="padding:10px 14px;text-align:center;color:white;font-weight:bold;font-size:0.95rem;background:{bg};">{col}</th>'
+    
+    # Build data rows
+    rows_html = ''
+    for _, row in df.iterrows():
+        month_val = row.get('Month', '')
+        row_bg = MONTH_COLORS.get(str(month_val), '#ffffff')
+        td_cells = f'<td style="padding:9px 14px;text-align:center;background:{row_bg};font-size:0.9rem;color:#444;"></td>'  # index
+        for col in df.columns:
+            val = row[col]
+            fmt_val = fmt.get(col, '{}').format(val) if col in fmt else str(val) if not isinstance(val, float) else f'{val:,.2f}'
+            # Difference / Pending column colouring
+            cell_style = f'padding:9px 14px;text-align:center;background:{row_bg};font-size:0.9rem;'
+            if col in ('Difference', 'Pending/Excess (-ve = Excess)'):
+                try:
+                    num = float(val)
+                    if num < 0:
+                        cell_style += 'background:#ccffcc !important;color:#2a6e00;font-weight:bold;'
+                    elif num > 0:
+                        cell_style += 'background:#ffcccc !important;color:#8b0000;font-weight:bold;'
+                    else:
+                        cell_style += 'background:#ffffcc !important;color:#555;'
+                except (ValueError, TypeError):
+                    pass
+            td_cells += f'<td style="{cell_style}">{fmt_val}</td>'
+        rows_html += f'<tr>{td_cells}</tr>'
+    
+    html = f"""
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #ddd;margin-bottom:1rem;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr>{th_cells}</tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    </div>"""
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def main():
     st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Apr 2026)</h1>', unsafe_allow_html=True)
     
@@ -503,20 +576,11 @@ def main():
             """, unsafe_allow_html=True)
             
             overview_data = df_monthly.copy()
-            overview_data['Difference'] = overview_data['To_Be'] - overview_data['Received']
-            
-            st.dataframe(
-                overview_data[['Month', 'To_Be', 'Received', 'Difference', 'Expense']].style.format({
-                    'To_Be': '₹{:,.2f}',
-                    'Received': '₹{:,.2f}',
-                    'Difference': '₹{:,.2f}',
-                    'Expense': '₹{:,.2f}'
-                }).set_properties(**{
-                    'text-align': 'center'
-                }).set_table_styles([
-                    {'selector': 'th', 'props': [('text-align', 'center'), ('background', 'linear-gradient(135deg, #1a1a6e, #1f77b4)'), ('color', 'white'), ('font-weight', 'bold')]}
-                ]),
-                use_container_width=True
+            overview_data = overview_data.rename(columns={'To_Be':'To Be Received','Received':'Actual Received','Extra_Income':'Extra Income'})
+            overview_data['Difference'] = overview_data['To Be Received'] - overview_data['Actual Received']
+            render_html_table(
+                overview_data[['Month','To Be Received','Actual Received','Difference','Expense','Extra Income']],
+                fmt={'To Be Received':'₹{:,.2f}','Actual Received':'₹{:,.2f}','Difference':'₹{:,.2f}','Expense':'₹{:,.2f}','Extra Income':'₹{:,.2f}'}
             )
             
             st.markdown("---")
@@ -542,30 +606,10 @@ def main():
                 # Add total column (all 6 income sources)
                 breakdown_display['Total'] = breakdown_display[['NBH', 'Lift', 'Event', 'Scrap', 'Parking_Fine', 'ClubHouse_Booking & Gym']].sum(axis=1)
                 
-                # Display as table
-                st.dataframe(
-                    breakdown_display.style.format({
-                        'NBH': '₹{:,.2f}',
-                        'Lift': '₹{:,.2f}',
-                        'Event': '₹{:,.2f}',
-                        'Scrap': '₹{:,.2f}',
-                        'Parking_Fine': '₹{:,.2f}',
-                        'ClubHouse_Booking & Gym': '₹{:,.2f}',
-                        'Total': '₹{:,.2f}'
-                    }).set_properties(**{
-                        'text-align': 'center'
-                    }).set_table_styles([
-                        {'selector': 'th',                          'props': [('text-align', 'center'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '0.95rem'), ('padding', '10px 12px')]},
-                        {'selector': 'th.col0',                     'props': [('background-color', '#555')]},           # Month
-                        {'selector': 'th.col1',                     'props': [('background-color', '#185FA5')]},        # NBH - blue
-                        {'selector': 'th.col2',                     'props': [('background-color', '#7F77DD')]},        # Lift - purple
-                        {'selector': 'th.col3',                     'props': [('background-color', '#1D9E75')]},        # Event - teal
-                        {'selector': 'th.col4',                     'props': [('background-color', '#BA7517')]},        # Scrap - amber
-                        {'selector': 'th.col5',                     'props': [('background-color', '#D85A30')]},        # Parking - orange
-                        {'selector': 'th.col6',                     'props': [('background-color', '#D4537E')]},        # Clubhouse - pink
-                        {'selector': 'th.col7',                     'props': [('background-color', '#3B6D11')]},        # Total - green
-                    ]),
-                    use_container_width=True
+                render_html_table(
+                    breakdown_display,
+                    fmt={'NBH':'₹{:,.2f}','Lift':'₹{:,.2f}','Event':'₹{:,.2f}','Scrap':'₹{:,.2f}',
+                         'Parking_Fine':'₹{:,.2f}','ClubHouse_Booking & Gym':'₹{:,.2f}','Total':'₹{:,.2f}'}
                 )
             
             # Wing/Shop Filter Section
@@ -680,45 +724,9 @@ def main():
                         # Calculate adjusted pending/excess after deducting fines
                         wing_shop_display['Pending/Excess (-ve = Excess)'] = wing_shop_display['Pending/Excess (-ve = Excess)'] - wing_shop_display['Fine_Amount']
                         
-                        # Style the dataframe
-                        def color_wing_shop_difference(val):
-                            if val < 0:
-                                return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
-                            elif val > 0:
-                                return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
-                            else:
-                                return 'background-color: #ffffcc'  # Yellow for zero
-                        
-                        def highlight_wing_shop_months(row):
-                            colors = {
-                                'Sep': 'background-color: #cce5ff',
-                                'Oct': 'background-color: #ffe5cc',
-                                'Nov': 'background-color: #d9ccff',
-                                'Dec': 'background-color: #fff0b3',
-                                'Jan': 'background-color: #ffccdd',
-                                'Feb': 'background-color: #b3f0e0',
-                                'Mar': 'background-color: #fff3b3',
-                                'Apr': 'background-color: #ccf0cc',
-                            }
-                            bg = colors.get(row['Month'], '')
-                            return [bg] * len(row)
-                        
-                        styled_wing_shop_df = wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']].style.format({
-                            'To Be Received': '₹{:,.2f}',
-                            'Actual Received': '₹{:,.2f}',
-                            'Pending/Excess (-ve = Excess)': '₹{:,.2f}'
-                        }).apply(highlight_wing_shop_months, axis=1).map(color_wing_shop_difference, subset=['Pending/Excess (-ve = Excess)'])
-                        
-                        styled_wing_shop_df = styled_wing_shop_df.set_properties(**{
-                            'text-align': 'center'
-                        }).set_table_styles([
-                            {'selector': 'th', 'props': [('text-align', 'center'), ('background', 'linear-gradient(135deg, #1a1a6e, #1f77b4)'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
-                            {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '1rem')]}
-                        ])
-                        
-                        st.dataframe(
-                            styled_wing_shop_df,
-                            use_container_width=True
+                        render_html_table(
+                            wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']],
+                            fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Pending/Excess (-ve = Excess)':'₹{:,.2f}'}
                         )
                     else:
                         st.warning(f"No data available for {selected_wing_shop}")
@@ -779,53 +787,9 @@ def main():
                     'Received': 'Actual Received'
                 })
                 
-                # Create a function to apply month backgrounds
-                def highlight_months(row):
-                    month = row['Month']
-                    colors = {
-                        'Sep': 'background-color: #cce5ff',   # Blue
-                        'Oct': 'background-color: #ffe5cc',   # Orange
-                        'Nov': 'background-color: #d9ccff',   # Purple
-                        'Dec': 'background-color: #fff0b3',   # Amber
-                        'Jan': 'background-color: #ffccdd',   # Pink
-                        'Feb': 'background-color: #b3f0e0',   # Teal
-                        'Mar': 'background-color: #fff3b3',   # Yellow
-                        'Apr': 'background-color: #ccf0cc',   # Green
-                    }
-                    bg = colors.get(month, '')
-                    return [bg] * len(row)
-                
-                # Apply styling
-                styled_df = detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']].style.format({
-                    'To Be Received': '₹{:,.2f}',
-                    'Actual Received': '₹{:,.2f}',
-                    'Difference': '₹{:,.2f}'
-                }).apply(highlight_months, axis=1)
-                
-                # Apply difference color coding on top of month backgrounds
-                def color_difference(val):
-                    if val < 0:
-                        return 'background-color: #ccffcc; font-weight: bold'  # Green for excess
-                    elif val > 0:
-                        return 'background-color: #ffcccc; font-weight: bold'  # Red for pending
-                    else:
-                        return ''
-                
-                styled_df = styled_df.map(color_difference, subset=['Difference'])
-                
-                # Add center alignment and header styling
-                styled_df = styled_df.set_properties(**{
-                    'text-align': 'center'
-                }).set_table_styles([
-                    {'selector': 'th', 'props': [('text-align', 'center'), ('background', 'linear-gradient(135deg, #1a1a6e, #1f77b4)'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
-                    {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '1rem')]}
-                ])
-                
-                # Display the table
-                st.dataframe(
-                    styled_df,
-                    use_container_width=True,
-                    height=600
+                render_html_table(
+                    detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']],
+                    fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Difference':'₹{:,.2f}'}
                 )
             
             # Download Reports
