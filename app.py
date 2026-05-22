@@ -543,7 +543,15 @@ def main():
                     }).set_properties(**{
                         'text-align': 'center'
                     }).set_table_styles([
-                        {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                        {'selector': 'th',                          'props': [('text-align', 'center'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '0.95rem'), ('padding', '10px 12px')]},
+                        {'selector': 'th.col0',                     'props': [('background-color', '#555')]},           # Month
+                        {'selector': 'th.col1',                     'props': [('background-color', '#185FA5')]},        # NBH - blue
+                        {'selector': 'th.col2',                     'props': [('background-color', '#7F77DD')]},        # Lift - purple
+                        {'selector': 'th.col3',                     'props': [('background-color', '#1D9E75')]},        # Event - teal
+                        {'selector': 'th.col4',                     'props': [('background-color', '#BA7517')]},        # Scrap - amber
+                        {'selector': 'th.col5',                     'props': [('background-color', '#D85A30')]},        # Parking - orange
+                        {'selector': 'th.col6',                     'props': [('background-color', '#D4537E')]},        # Clubhouse - pink
+                        {'selector': 'th.col7',                     'props': [('background-color', '#3B6D11')]},        # Total - green
                     ]),
                     use_container_width=True
                 )
