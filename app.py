@@ -65,13 +65,25 @@ st.markdown("""
     .metric-value { font-size: 1.35rem; font-weight: 600; }
     .metric-sub   { font-size: 0.68rem; opacity: 0.75; margin-top: 3px; }
 
-    /* ── Dataframe headers ── */
+    /* ── Dataframe headers — ALL tables ── */
     div[data-testid="stDataFrame"] table th,
-    .dataframe th { text-align: center !important; background-color: #1f77b4 !important; color: white !important; font-weight: bold !important; padding: 12px !important; font-size: 1.0rem !important; }
+    .dataframe th,
+    .col_heading {
+        text-align: center !important;
+        background: linear-gradient(135deg, #1a1a6e, #1f77b4) !important;
+        color: white !important;
+        font-weight: bold !important;
+        padding: 12px !important;
+        font-size: 1.0rem !important;
+        letter-spacing: 0.03em !important;
+    }
     div[data-testid="stDataFrame"] table td,
-    .dataframe td { text-align: center !important; padding: 10px !important; font-size: 1rem !important; }
-    .col_heading { text-align: center !important; background-color: #1f77b4 !important; color: white !important; }
-    .data { text-align: center !important; }
+    .dataframe td,
+    .data {
+        text-align: center !important;
+        padding: 10px !important;
+        font-size: 1rem !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -502,7 +514,7 @@ def main():
                 }).set_properties(**{
                     'text-align': 'center'
                 }).set_table_styles([
-                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold')]}
+                    {'selector': 'th', 'props': [('text-align', 'center'), ('background', 'linear-gradient(135deg, #1a1a6e, #1f77b4)'), ('color', 'white'), ('font-weight', 'bold')]}
                 ]),
                 use_container_width=True
             )
@@ -700,7 +712,7 @@ def main():
                         styled_wing_shop_df = styled_wing_shop_df.set_properties(**{
                             'text-align': 'center'
                         }).set_table_styles([
-                            {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
+                            {'selector': 'th', 'props': [('text-align', 'center'), ('background', 'linear-gradient(135deg, #1a1a6e, #1f77b4)'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
                             {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '1rem')]}
                         ])
                         
@@ -805,7 +817,7 @@ def main():
                 styled_df = styled_df.set_properties(**{
                     'text-align': 'center'
                 }).set_table_styles([
-                    {'selector': 'th', 'props': [('text-align', 'center'), ('background-color', '#1f77b4'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
+                    {'selector': 'th', 'props': [('text-align', 'center'), ('background', 'linear-gradient(135deg, #1a1a6e, #1f77b4)'), ('color', 'white'), ('font-weight', 'bold'), ('font-size', '1.1rem'), ('padding', '12px')]},
                     {'selector': 'td', 'props': [('padding', '10px'), ('font-size', '1rem')]}
                 ])
                 
