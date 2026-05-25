@@ -578,10 +578,79 @@ def main():
             overview_data = df_monthly.copy()
             overview_data = overview_data.rename(columns={'To_Be':'To Be Received','Received':'Actual Received','Extra_Income':'Extra Income'})
             overview_data['Difference'] = overview_data['To Be Received'] - overview_data['Actual Received']
-            render_html_table(
-                overview_data[['Month','To Be Received','Actual Received','Difference','Expense','Extra Income']],
-                fmt={'To Be Received':'₹{:,.2f}','Actual Received':'₹{:,.2f}','Difference':'₹{:,.2f}','Expense':'₹{:,.2f}','Extra Income':'₹{:,.2f}'}
-            )
+            
+            # Build fine details per month
+            fine_by_month = {}
+            if not df_fines.empty:
+                for month in overview_data['Month'].unique():
+                    mfines = df_fines[df_fines['Month'] == month]
+                    parts = []
+                    for _, fr in mfines.iterrows():
+                        wing = fr['Wing']
+                        if fr['HK'] > 0:       parts.append(f"{wing}·HK ₹{fr['HK']:,.0f}")
+                        if fr['Quinteze'] > 0:  parts.append(f"{wing}·Q ₹{fr['Quinteze']:,.0f}")
+                        if fr['Security'] > 0:  parts.append(f"{wing}·Sec ₹{fr['Security']:,.0f}")
+                        if fr['STP'] > 0:       parts.append(f"{wing}·STP ₹{fr['STP']:,.0f}")
+                    fine_by_month[month] = parts
+            
+            # Build HTML table manually to support fine detail tags
+            month_colors = {
+                'Sep':'#cce5ff','Oct':'#ffe5cc','Nov':'#d9ccff','Dec':'#fff0b3',
+                'Jan':'#ffccdd','Feb':'#b3f0e0','Mar':'#fff3b3','Apr':'#ccf0cc','May':'#f0ccff'
+            }
+            header_cols = {
+                'Month':       '#555555',
+                'To Be Received': '#185FA5',
+                'Actual Received':'#1D9E75',
+                'Difference':  '#A32D2D',
+                'Expense':     '#BA7517',
+                'Extra Income':'#D4537E',
+                'Fine Details':'#D85A30',
+            }
+            th_html = '<th style="padding:10px 12px;color:#fff;font-weight:600;font-size:11px;background:#555;"></th>'
+            for col, bg in header_cols.items():
+                th_html += f'<th style="padding:10px 12px;text-align:center;color:#fff;font-weight:600;font-size:11px;letter-spacing:0.03em;background:{bg};">{col}</th>'
+            
+            rows_html = ''
+            for i, row in overview_data.iterrows():
+                month = row['Month']
+                bg = month_colors.get(month, '#ffffff')
+                td_style = f'padding:9px 12px;text-align:center;background:{bg};border-bottom:0.5px solid #ddd;font-size:12px;'
+                
+                diff = row['Difference']
+                if diff > 0:
+                    diff_style = td_style + 'color:#8b0000;font-weight:700;'
+                elif diff < 0:
+                    diff_style = td_style + 'color:#3B6D11;font-weight:700;'
+                else:
+                    diff_style = td_style + 'color:#555;'
+                
+                # Fine detail tags
+                fines = fine_by_month.get(month, [])
+                if fines:
+                    tags = ''.join([f'<span style="display:inline-flex;font-size:10px;background:#FAEEDA;color:#854F0B;padding:2px 7px;border-radius:4px;margin:2px;font-weight:500;white-space:nowrap;border:0.5px solid #e0b870;">{f}</span>' for f in fines])
+                    fine_td = f'<td style="{td_style}text-align:left;">{tags}</td>'
+                else:
+                    fine_td = f'<td style="{td_style}color:#bbb;">—</td>'
+                
+                rows_html += f'''<tr>
+                    <td style="{td_style}color:#999;font-size:11px;">{i}</td>
+                    <td style="{td_style}font-weight:500;">{month}</td>
+                    <td style="{td_style}">₹{row["To Be Received"]:,.2f}</td>
+                    <td style="{td_style}">₹{row["Actual Received"]:,.2f}</td>
+                    <td style="{diff_style}">₹{diff:,.2f}</td>
+                    <td style="{td_style}">₹{row["Expense"]:,.2f}</td>
+                    <td style="{td_style}">₹{row["Extra Income"]:,.2f}</td>
+                    {fine_td}
+                </tr>'''
+            
+            st.markdown(f"""
+            <div style="overflow-x:auto;border-radius:10px;border:1px solid #ddd;margin-bottom:1rem;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead><tr>{th_html}</tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>
+            </div>""", unsafe_allow_html=True)
             
             st.markdown("---")
             
