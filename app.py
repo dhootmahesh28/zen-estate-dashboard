@@ -129,7 +129,8 @@ def load_excel_data(file):
             {'name': 'Jan', 'to_be_row': 77, 'received_row': 76, 'diff_row': 78, 'summary_row': 82, 'expense_col': 15},
             {'name': 'Feb', 'to_be_row': 95, 'received_row': 94, 'diff_row': 96, 'summary_row': 100, 'expense_col': 15},
             {'name': 'Mar', 'to_be_row': 111, 'received_row': 110, 'diff_row': 112, 'summary_row': 116, 'expense_col': 15},
-            {'name': 'Apr', 'to_be_row': 128, 'received_row': 127, 'diff_row': 129, 'summary_row': 133, 'expense_col': 15}
+            {'name': 'Apr', 'to_be_row': 128, 'received_row': 127, 'diff_row': 129, 'summary_row': 133, 'expense_col': 15},
+            {'name': 'May', 'to_be_row': 147, 'received_row': 146, 'diff_row': 148, 'summary_row': 152, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -181,7 +182,8 @@ def load_excel_data(file):
             {'month': 'Jan', 'start': 70, 'end': 85},    # Jan vendor rows
             {'month': 'Feb', 'start': 88, 'end': 102},   # Feb vendor rows
             {'month': 'Mar', 'start': 104, 'end': 118},  # Mar vendor rows
-            {'month': 'Apr', 'start': 121, 'end': 133}   # Apr vendor rows
+            {'month': 'Apr', 'start': 121, 'end': 133},
+            {'month': 'May', 'start': 139, 'end': 152}    # May vendor rows
         ]
         
         for section in vendor_sections:
@@ -215,7 +217,8 @@ def load_excel_data(file):
             'Jan': 76,
             'Feb': 94,   # Total row for Feb
             'Mar': 110,  # Total row for Mar
-            'Apr': 127   # Total row for Apr (Total Amount Received per Wing)
+            'Apr': 127,  # Total row for Apr
+            'May': 146   # Total row for May
         }
         
         for month, row_idx in month_rows.items():
@@ -260,7 +263,8 @@ def load_excel_data(file):
             {'month': 'Jan', 'vendor_row': 69},
             {'month': 'Feb', 'vendor_row': 87},
             {'month': 'Mar', 'vendor_row': 103},
-            {'month': 'Apr', 'vendor_row': 120}
+            {'month': 'Apr', 'vendor_row': 120},
+            {'month': 'May', 'vendor_row': 138}
         ]
         
         fine_data = {}  # keyed by (month, wing)
@@ -330,7 +334,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     # Set the year based on month
-    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr"] else "2025"
+    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May"] else "2025"
     
     fig.update_layout(
         title=f'Vendor Expense Breakdown ({month} {year})',
@@ -483,7 +487,7 @@ HEADER_COLORS = {
 
 MONTH_COLORS = {
     'Sep': '#cce5ff', 'Oct': '#ffe5cc', 'Nov': '#d9ccff', 'Dec': '#fff0b3',
-    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc',
+    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff',
 }
 
 def render_html_table(df, fmt=None):
@@ -532,7 +536,7 @@ def render_html_table(df, fmt=None):
 
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Apr 2026)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – May 2026)</h1>', unsafe_allow_html=True)
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
@@ -551,7 +555,7 @@ def main():
                   <div class='metric-card mc-blue'>
                     <div class='metric-label'>Total to be received</div>
                     <div class='metric-value'>₹{total_to_be/10000000:.2f} Cr</div>
-                    <div class='metric-sub'>Sep 2025 – Apr 2026</div>
+                    <div class='metric-sub'>Sep 2025 – May 2026</div>
                   </div>
                   <div class='metric-card mc-green'>
                     <div class='metric-label'>Total received</div>
@@ -749,7 +753,7 @@ def main():
                         if 'Wing' in wing_shop_display.columns:
                             wing_shop_display = wing_shop_display.drop('Wing', axis=1)
                         # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8}
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9}
                         wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                         wing_shop_display = wing_shop_display.sort_values('month_sort')
                         wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
@@ -837,7 +841,7 @@ def main():
                     detailed_breakdown['Fine_Amount']  = 0
                 
                 # Create a custom sort order for months
-                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8}
+                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
                 
                 # Sort by Month FIRST (chronologically), then Wing (alphabetically)
