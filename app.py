@@ -113,6 +113,7 @@ def load_excel_from_github():
 def load_leela_data():
     """Load Leela Fund expenditure data from Sheet3."""
     try:
+        import requests, io
         url = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
         response = requests.get(url, timeout=30)
         response.raise_for_status()
@@ -130,6 +131,9 @@ def load_leela_data():
         return pd.DataFrame(items)
     except Exception as e:
         return pd.DataFrame()
+
+@st.cache_data(ttl=0)
+def load_excel_data(file):
     """Load all financial data from Excel"""
     try:
         df = pd.read_excel(file, sheet_name='Sheet1', header=None)
