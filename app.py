@@ -110,6 +110,30 @@ def load_excel_from_github():
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 @st.cache_data(ttl=0)
+def load_leela_data():
+    """Load Leela Fund expenditure data from Sheet3 (data starts at row index 2)."""
+    try:
+        import requests, io
+        url = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        df = pd.read_excel(io.BytesIO(response.content), sheet_name='Sheet3', header=None)
+        
+        items = []
+        for row in range(df.shape[0]):
+            desc = df.iloc[row, 1] if df.shape[1] > 1 else None
+            amt  = df.iloc[row, 2] if df.shape[1] > 2 else None
+            # Only rows where col 1 has a valid string description
+            if pd.notna(desc) and isinstance(desc, str) and desc.strip():
+                items.append({
+                    'Description': desc.strip(),
+                    'Amount': float(amt) if pd.notna(amt) and isinstance(amt, (int, float)) else None
+                })
+        return pd.DataFrame(items)
+    except Exception as e:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=0)
 def load_excel_data(file):
     """Load all financial data from Excel"""
     try:
@@ -130,7 +154,8 @@ def load_excel_data(file):
             {'name': 'Feb', 'to_be_row': 95, 'received_row': 94, 'diff_row': 96, 'summary_row': 100, 'expense_col': 15},
             {'name': 'Mar', 'to_be_row': 111, 'received_row': 110, 'diff_row': 112, 'summary_row': 116, 'expense_col': 15},
             {'name': 'Apr', 'to_be_row': 128, 'received_row': 127, 'diff_row': 129, 'summary_row': 133, 'expense_col': 15},
-            {'name': 'May', 'to_be_row': 147, 'received_row': 146, 'diff_row': 148, 'summary_row': 152, 'expense_col': 15}
+            {'name': 'May', 'to_be_row': 147, 'received_row': 146, 'diff_row': 148, 'summary_row': 152, 'expense_col': 15},
+            {'name': 'Jun', 'to_be_row': 166, 'received_row': 165, 'diff_row': 167, 'summary_row': 171, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -218,7 +243,8 @@ def load_excel_data(file):
             'Feb': 94,   # Total row for Feb
             'Mar': 110,  # Total row for Mar
             'Apr': 127,  # Total row for Apr
-            'May': 146   # Total row for May
+            'May': 146,  # Total row for May
+            'Jun': 165   # Total row for Jun
         }
         
         for month, row_idx in month_rows.items():
@@ -264,7 +290,8 @@ def load_excel_data(file):
             {'month': 'Feb', 'vendor_row': 87},
             {'month': 'Mar', 'vendor_row': 103},
             {'month': 'Apr', 'vendor_row': 120},
-            {'month': 'May', 'vendor_row': 138}
+            {'month': 'May', 'vendor_row': 138},
+            {'month': 'Jun', 'vendor_row': 158}
         ]
         
         fine_data = {}  # keyed by (month, wing)
@@ -334,7 +361,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     # Set the year based on month
-    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May"] else "2025"
+    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May", "Jun"] else "2025"
     
     fig.update_layout(
         title=f'Vendor Expense Breakdown ({month} {year})',
@@ -487,7 +514,7 @@ HEADER_COLORS = {
 
 MONTH_COLORS = {
     'Sep': '#cce5ff', 'Oct': '#ffe5cc', 'Nov': '#d9ccff', 'Dec': '#fff0b3',
-    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff',
+    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff', 'Jun': '#ffd6cc',
 }
 
 def render_html_table(df, fmt=None):
@@ -535,8 +562,116 @@ def render_html_table(df, fmt=None):
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_leela_fund():
+    """Render the Leela Fund Details section."""
+    st.markdown("<div class='sec-header' style='background:linear-gradient(90deg,#5B4FCF,#9B59B6);margin-top:1.5rem;'>🏦 Leela Fund Details</div>", unsafe_allow_html=True)
+    
+    try:
+        df_leela = load_leela_data()
+        
+        if not df_leela.empty:
+            leela_total   = 2800000
+            leela_items   = df_leela.dropna(subset=['Amount']).copy()
+            total_spent   = leela_items['Amount'].sum()
+            balance       = leela_total - total_spent
+            pct_spent     = (total_spent / leela_total) * 100
+            pct_left      = 100 - pct_spent
+            
+            # Top 3 metric cards
+            st.markdown(f"""
+            <div class='metric-row'>
+              <div class='metric-card' style='background:linear-gradient(135deg,#5B4FCF,#9B59B6);'>
+                <div class='metric-label'>Total Received from Leela</div>
+                <div class='metric-value'>₹{leela_total/100000:.0f} Lakh</div>
+                <div class='metric-sub'>One-time corpus fund</div>
+              </div>
+              <div class='metric-card mc-red'>
+                <div class='metric-label'>Total Utilised</div>
+                <div class='metric-value'>₹{total_spent:,.0f}</div>
+                <div class='metric-sub'>{pct_spent:.2f}% of fund used</div>
+              </div>
+              <div class='metric-card mc-green'>
+                <div class='metric-label'>Available Balance</div>
+                <div class='metric-value'>₹{balance:,.0f}</div>
+                <div class='metric-sub'>{pct_left:.2f}% remaining</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Build HTML table with running balance
+            th_html = ''
+            for col, bg in [('#','#555'), ('Description','#5B4FCF'),
+                             ('Amount Spent (₹)','#A32D2D'),
+                             ('Running Balance (₹)','#1D6B3B'),
+                             ('Status','#854F0B')]:
+                align = 'left' if col == 'Description' else 'center'
+                th_html += f'<th style="padding:10px 14px;text-align:{align};color:#fff;font-weight:600;font-size:11px;letter-spacing:0.04em;background:{bg};">{col}</th>'
+            
+            rows_html = ''
+            # Opening balance row
+            rows_html += f'''<tr>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;font-size:11px;">—</td>
+                <td style="padding:10px 14px;text-align:left;border-bottom:0.5px solid #eee;font-weight:600;color:#5B4FCF;">Opening Balance (Leela Fund)</td>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;">—</td>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;font-weight:700;color:#1D6B3B;">₹{leela_total:,.2f}</td>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;"><span style="background:#D5F5E3;color:#1D6B3B;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;">Received</span></td>
+            </tr>'''
+            
+            running_balance = leela_total
+            all_rows = df_leela.reset_index(drop=True)
+            
+            for i, row in all_rows.iterrows():
+                desc = str(row['Description'])
+                amt  = row.get('Amount', None)
+                has_amt = pd.notna(amt)
+                
+                if has_amt:
+                    running_balance -= float(amt)
+                    amt_td      = f'<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#A32D2D;font-weight:600;">₹{float(amt):,.2f}</td>'
+                    balance_td  = f'<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#1D6B3B;font-weight:500;">₹{running_balance:,.2f}</td>'
+                    status_td   = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;"><span style="background:#FCEBEB;color:#A32D2D;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;">Spent</span></td>'
+                    row_bg      = '#fff'
+                else:
+                    amt_td      = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;">—</td>'
+                    balance_td  = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;">—</td>'
+                    status_td   = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;"><span style="background:#FFF3CD;color:#856404;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;">Pending</span></td>'
+                    row_bg      = '#fdfcf5'
+                
+                rows_html += f'''<tr style="background:{row_bg};">
+                    <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;font-size:11px;">{i+1}</td>
+                    <td style="padding:10px 14px;text-align:left;border-bottom:0.5px solid #eee;">{desc}</td>
+                    {amt_td}{balance_td}{status_td}
+                </tr>'''
+            
+            # Total row
+            rows_html += f'''<tr style="background:#f0eaff;font-weight:700;border-top:2px solid #9B59B6;">
+                <td colspan="2" style="padding:10px 14px;text-align:left;border-top:2px solid #9B59B6;">Total Utilised</td>
+                <td style="padding:10px 14px;text-align:center;border-top:2px solid #9B59B6;color:#A32D2D;">₹{total_spent:,.2f}</td>
+                <td style="padding:10px 14px;text-align:center;border-top:2px solid #9B59B6;">—</td>
+                <td style="padding:10px 14px;text-align:center;border-top:2px solid #9B59B6;color:#5B4FCF;">{pct_spent:.2f}%</td>
+            </tr>
+            <tr style="background:linear-gradient(90deg,#eafaf1,#d5f5e3);font-weight:700;">
+                <td colspan="2" style="padding:12px 14px;text-align:left;color:#1D6B3B;font-size:14px;border-top:2px solid #27AE60;">💰 Available Balance</td>
+                <td style="padding:12px 14px;text-align:center;border-top:2px solid #27AE60;">—</td>
+                <td style="padding:12px 14px;text-align:center;border-top:2px solid #27AE60;color:#1D6B3B;font-size:15px;">₹{balance:,.2f}</td>
+                <td style="padding:12px 14px;text-align:center;border-top:2px solid #27AE60;color:#1D6B3B;">{pct_left:.2f}% left</td>
+            </tr>'''
+            
+            st.markdown(f"""
+            <div style="overflow-x:auto;border-radius:12px;border:0.5px solid #ddd;margin-bottom:1rem;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead><tr>{th_html}</tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>
+            </div>""", unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.warning(f"Leela Fund data not available: {e}")
+    
+
+
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – May 2026)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Jun 2026)</h1>', unsafe_allow_html=True)
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
@@ -555,7 +690,7 @@ def main():
                   <div class='metric-card mc-blue'>
                     <div class='metric-label'>Total to be received</div>
                     <div class='metric-value'>₹{total_to_be/10000000:.2f} Cr</div>
-                    <div class='metric-sub'>Sep 2025 – May 2026</div>
+                    <div class='metric-sub'>Sep 2025 – Jun 2026</div>
                   </div>
                   <div class='metric-card mc-green'>
                     <div class='metric-label'>Total received</div>
@@ -657,6 +792,11 @@ def main():
             </div>""", unsafe_allow_html=True)
             
             st.markdown("---")
+
+            # Leela Fund Details (right after Monthly Overview)
+            render_leela_fund()
+
+
             
             # Vendor Breakdown - 5 separate charts for each month
             # Extra Income
@@ -753,7 +893,7 @@ def main():
                         if 'Wing' in wing_shop_display.columns:
                             wing_shop_display = wing_shop_display.drop('Wing', axis=1)
                         # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9}
+                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10}
                         wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                         wing_shop_display = wing_shop_display.sort_values('month_sort')
                         wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
@@ -841,7 +981,7 @@ def main():
                     detailed_breakdown['Fine_Amount']  = 0
                 
                 # Create a custom sort order for months
-                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9}
+                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10}
                 detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
                 
                 # Sort by Month FIRST (chronologically), then Wing (alphabetically)
@@ -867,6 +1007,7 @@ def main():
             
             # Download Reports
             st.markdown("---")
+
             st.markdown("### 📥 Download Reports")
             
             col1, col2, col3 = st.columns(3)
@@ -898,6 +1039,7 @@ def main():
                         f"vendor_data_{datetime.now().strftime('%Y%m%d')}.csv",
                         "text/csv"
                     )
+
     else:
         st.warning("⚠️ No data found")
     
