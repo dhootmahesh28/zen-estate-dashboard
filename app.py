@@ -110,6 +110,30 @@ def load_excel_from_github():
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 @st.cache_data(ttl=0)
+def load_leela_data():
+    """Load Leela Fund expenditure data from Sheet3 (data starts at row index 2)."""
+    try:
+        import requests, io
+        url = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        df = pd.read_excel(io.BytesIO(response.content), sheet_name='Sheet3', header=None)
+        
+        items = []
+        for row in range(df.shape[0]):
+            desc = df.iloc[row, 1] if df.shape[1] > 1 else None
+            amt  = df.iloc[row, 2] if df.shape[1] > 2 else None
+            # Only rows where col 1 has a valid string description
+            if pd.notna(desc) and isinstance(desc, str) and desc.strip():
+                items.append({
+                    'Description': desc.strip(),
+                    'Amount': float(amt) if pd.notna(amt) and isinstance(amt, (int, float)) else None
+                })
+        return pd.DataFrame(items)
+    except Exception as e:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=0)
 def load_excel_data(file):
     """Load all financial data from Excel"""
     try:
@@ -535,6 +559,114 @@ def render_html_table(df, fmt=None):
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_leela_fund():
+    """Render the Leela Fund Details section."""
+    st.markdown("<div class='sec-header' style='background:linear-gradient(90deg,#5B4FCF,#9B59B6);margin-top:1.5rem;'>🏦 Leela Fund Details</div>", unsafe_allow_html=True)
+    
+    try:
+        df_leela = load_leela_data()
+        
+        if not df_leela.empty:
+            leela_total   = 2800000
+            leela_items   = df_leela.dropna(subset=['Amount']).copy()
+            total_spent   = leela_items['Amount'].sum()
+            balance       = leela_total - total_spent
+            pct_spent     = (total_spent / leela_total) * 100
+            pct_left      = 100 - pct_spent
+            
+            # Top 3 metric cards
+            st.markdown(f"""
+            <div class='metric-row'>
+              <div class='metric-card' style='background:linear-gradient(135deg,#5B4FCF,#9B59B6);'>
+                <div class='metric-label'>Total Received from Leela</div>
+                <div class='metric-value'>₹{leela_total/100000:.0f} Lakh</div>
+                <div class='metric-sub'>One-time corpus fund</div>
+              </div>
+              <div class='metric-card mc-red'>
+                <div class='metric-label'>Total Utilised</div>
+                <div class='metric-value'>₹{total_spent:,.0f}</div>
+                <div class='metric-sub'>{pct_spent:.2f}% of fund used</div>
+              </div>
+              <div class='metric-card mc-green'>
+                <div class='metric-label'>Available Balance</div>
+                <div class='metric-value'>₹{balance:,.0f}</div>
+                <div class='metric-sub'>{pct_left:.2f}% remaining</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Build HTML table with running balance
+            th_html = ''
+            for col, bg in [('#','#555'), ('Description','#5B4FCF'),
+                             ('Amount Spent (₹)','#A32D2D'),
+                             ('Running Balance (₹)','#1D6B3B'),
+                             ('Status','#854F0B')]:
+                align = 'left' if col == 'Description' else 'center'
+                th_html += f'<th style="padding:10px 14px;text-align:{align};color:#fff;font-weight:600;font-size:11px;letter-spacing:0.04em;background:{bg};">{col}</th>'
+            
+            rows_html = ''
+            # Opening balance row
+            rows_html += f'''<tr>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;font-size:11px;">—</td>
+                <td style="padding:10px 14px;text-align:left;border-bottom:0.5px solid #eee;font-weight:600;color:#5B4FCF;">Opening Balance (Leela Fund)</td>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;">—</td>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;font-weight:700;color:#1D6B3B;">₹{leela_total:,.2f}</td>
+                <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;"><span style="background:#D5F5E3;color:#1D6B3B;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;">Received</span></td>
+            </tr>'''
+            
+            running_balance = leela_total
+            all_rows = df_leela.reset_index(drop=True)
+            
+            for i, row in all_rows.iterrows():
+                desc = str(row['Description'])
+                amt  = row.get('Amount', None)
+                has_amt = pd.notna(amt)
+                
+                if has_amt:
+                    running_balance -= float(amt)
+                    amt_td      = f'<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#A32D2D;font-weight:600;">₹{float(amt):,.2f}</td>'
+                    balance_td  = f'<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#1D6B3B;font-weight:500;">₹{running_balance:,.2f}</td>'
+                    status_td   = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;"><span style="background:#FCEBEB;color:#A32D2D;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;">Spent</span></td>'
+                    row_bg      = '#fff'
+                else:
+                    amt_td      = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;">—</td>'
+                    balance_td  = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;">—</td>'
+                    status_td   = '<td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;"><span style="background:#FFF3CD;color:#856404;font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;">Pending</span></td>'
+                    row_bg      = '#fdfcf5'
+                
+                rows_html += f'''<tr style="background:{row_bg};">
+                    <td style="padding:10px 14px;text-align:center;border-bottom:0.5px solid #eee;color:#aaa;font-size:11px;">{i+1}</td>
+                    <td style="padding:10px 14px;text-align:left;border-bottom:0.5px solid #eee;">{desc}</td>
+                    {amt_td}{balance_td}{status_td}
+                </tr>'''
+            
+            # Total row
+            rows_html += f'''<tr style="background:#f0eaff;font-weight:700;border-top:2px solid #9B59B6;">
+                <td colspan="2" style="padding:10px 14px;text-align:left;border-top:2px solid #9B59B6;">Total Utilised</td>
+                <td style="padding:10px 14px;text-align:center;border-top:2px solid #9B59B6;color:#A32D2D;">₹{total_spent:,.2f}</td>
+                <td style="padding:10px 14px;text-align:center;border-top:2px solid #9B59B6;">—</td>
+                <td style="padding:10px 14px;text-align:center;border-top:2px solid #9B59B6;color:#5B4FCF;">{pct_spent:.2f}%</td>
+            </tr>
+            <tr style="background:linear-gradient(90deg,#eafaf1,#d5f5e3);font-weight:700;">
+                <td colspan="2" style="padding:12px 14px;text-align:left;color:#1D6B3B;font-size:14px;border-top:2px solid #27AE60;">💰 Available Balance</td>
+                <td style="padding:12px 14px;text-align:center;border-top:2px solid #27AE60;">—</td>
+                <td style="padding:12px 14px;text-align:center;border-top:2px solid #27AE60;color:#1D6B3B;font-size:15px;">₹{balance:,.2f}</td>
+                <td style="padding:12px 14px;text-align:center;border-top:2px solid #27AE60;color:#1D6B3B;">{pct_left:.2f}% left</td>
+            </tr>'''
+            
+            st.markdown(f"""
+            <div style="overflow-x:auto;border-radius:12px;border:0.5px solid #ddd;margin-bottom:1rem;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead><tr>{th_html}</tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>
+            </div>""", unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.warning(f"Leela Fund data not available: {e}")
+    
+
+
 def main():
     st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – May 2026)</h1>', unsafe_allow_html=True)
     
@@ -657,6 +789,11 @@ def main():
             </div>""", unsafe_allow_html=True)
             
             st.markdown("---")
+
+            # Leela Fund Details (right after Monthly Overview)
+            render_leela_fund()
+
+
             
             # Vendor Breakdown - 5 separate charts for each month
             # Extra Income
@@ -867,6 +1004,7 @@ def main():
             
             # Download Reports
             st.markdown("---")
+
             st.markdown("### 📥 Download Reports")
             
             col1, col2, col3 = st.columns(3)
@@ -898,6 +1036,7 @@ def main():
                         f"vendor_data_{datetime.now().strftime('%Y%m%d')}.csv",
                         "text/csv"
                     )
+
     else:
         st.warning("⚠️ No data found")
     
