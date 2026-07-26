@@ -170,7 +170,17 @@ def load_excel_data(file):
             to_be = df.iloc[month_info['summary_row'], 6] if pd.notna(df.iloc[month_info['summary_row'], 6]) else 0
             received = df.iloc[month_info['summary_row'], 9] if pd.notna(df.iloc[month_info['summary_row'], 9]) else 0
             expense = df.iloc[month_info['summary_row'], month_info['expense_col']] if pd.notna(df.iloc[month_info['summary_row'], month_info['expense_col']]) else 0
-            extra_income = df.iloc[month_info['summary_row'], 18] if pd.notna(df.iloc[month_info['summary_row'], 18]) else 0
+            
+            # Compute Extra Income from breakdown row (sum cols 23-28) to match breakdown table
+            breakdown_row_map = {
+                'Sep': 8, 'Oct': 28, 'Nov': 44, 'Dec': 61, 'Jan': 76,
+                'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181
+            }
+            br = breakdown_row_map.get(month, month_info['summary_row'])
+            extra_income = sum(
+                float(df.iloc[br, c]) if pd.notna(df.iloc[br, c]) and isinstance(df.iloc[br, c], (int, float)) else 0
+                for c in [23, 24, 25, 26, 27, 28]
+            )
             
             monthly_data.append({
                 'Month': month,
