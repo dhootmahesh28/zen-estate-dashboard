@@ -111,19 +111,19 @@ def load_excel_from_github():
 
 @st.cache_data(ttl=0)
 def load_leela_data():
-    """Load Leela Fund expenditure data from Sheet3 (data starts at row index 2)."""
+    """Load Leela Fund expenditure data from Sheet5 (col C=description, col D=amount)."""
     try:
         import requests, io
         url = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
         response = requests.get(url, timeout=30)
         response.raise_for_status()
-        df = pd.read_excel(io.BytesIO(response.content), sheet_name='Sheet3', header=None)
+        df = pd.read_excel(io.BytesIO(response.content), sheet_name='Sheet5', header=None)
         
         items = []
         for row in range(df.shape[0]):
-            desc = df.iloc[row, 1] if df.shape[1] > 1 else None
-            amt  = df.iloc[row, 2] if df.shape[1] > 2 else None
-            # Only rows where col 1 has a valid string description
+            # Description in col C (index 2), Amount in col D (index 3)
+            desc = df.iloc[row, 2] if df.shape[1] > 2 else None
+            amt  = df.iloc[row, 3] if df.shape[1] > 3 else None
             if pd.notna(desc) and isinstance(desc, str) and desc.strip():
                 items.append({
                     'Description': desc.strip(),
