@@ -109,6 +109,135 @@ def load_excel_from_github():
         st.info("Please make sure the Excel file is uploaded to your GitHub repository.")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
+PETTY_CASH_SHEETS = [
+    ("September 2025", "Sep 2025"),
+    ("October 2025", "Oct 2025"),
+    ("November 2025", "Nov 2025"),
+    ("December 2025", "Dec 2025"),
+    ("January 2026", "Jan 2026"),
+    ("Feb.2026", "Feb 2026"),
+    ("March 2026", "Mar 2026"),
+    ("April 2026", "Apr 2026"),
+    ("May 2026", "May 2026"),
+    ("June 2026", "Jun 2026"),
+    ("July 2026", "Jul 2026"),
+    ("AUGUST 26", "Aug 2026"),
+]
+
+PETTY_CASH_URL = (
+    "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/"
+    "Petty_Cash_Expense_Details.xlsx"
+)
+
+
+def _format_petty_date(val):
+    if pd.isna(val) or val == "":
+        return ""
+    if isinstance(val, (datetime, pd.Timestamp)):
+        return val.strftime("%d-%b-%y")
+    if isinstance(val, (int, float)) and val > 40000:
+        return (pd.Timestamp("1899-12-30") + pd.Timedelta(days=int(val))).strftime("%d-%b-%y")
+    return str(val).strip()
+
+
+def _parse_petty_month_sheet(df):
+    """Parse one monthly petty cash sheet (header=None layout)."""
+    opening = 0.0
+    total_credit = 0.0
+    total_debit = 0.0
+    rows = []
+    sr = 0
+
+    for idx in range(len(df)):
+        row = df.iloc[idx]
+        particulars = (
+            str(row.iloc[2]).strip()
+            if len(row) > 2 and pd.notna(row.iloc[2])
+            else ""
+        )
+        whom = (
+            str(row.iloc[3]).strip()
+            if len(row) > 3 and pd.notna(row.iloc[3])
+            else ""
+        )
+        vr_type = (
+            str(row.iloc[4]).strip()
+            if len(row) > 4 and pd.notna(row.iloc[4])
+            else ""
+        )
+        credit = (
+            float(row.iloc[5])
+            if len(row) > 5 and pd.notna(row.iloc[5]) and isinstance(row.iloc[5], (int, float))
+            else 0.0
+        )
+        debit = (
+            float(row.iloc[6])
+            if len(row) > 6 and pd.notna(row.iloc[6]) and isinstance(row.iloc[6], (int, float))
+            else 0.0
+        )
+        date_val = row.iloc[1] if len(row) > 1 else ""
+
+        if whom == "Opening Balance":
+            opening = credit
+            continue
+
+        if "Closing Balance" in particulars:
+            break
+        if not particulars and not whom and credit and debit:
+            break
+        if particulars == "Total" or whom == "Total":
+            break
+
+        if not particulars and not whom and credit == 0 and debit == 0:
+            continue
+
+        sr += 1
+        total_credit += credit
+        total_debit += debit
+        rows.append([
+            str(sr),
+            _format_petty_date(date_val),
+            particulars,
+            whom,
+            vr_type,
+            credit if credit else "",
+            debit if debit else "",
+        ])
+
+    closing = opening + total_credit - total_debit
+    return {
+        "ob": opening,
+        "tc": total_credit,
+        "td": total_debit,
+        "cb": closing,
+        "rows": rows,
+    }
+
+
+@st.cache_data(ttl=0)
+def load_petty_cash_data():
+    """Load petty cash monthly data from the Petty Cash Excel workbook."""
+    try:
+        import io
+        import requests
+
+        response = requests.get(PETTY_CASH_URL, timeout=30)
+        response.raise_for_status()
+        excel_bytes = response.content
+        xl = pd.ExcelFile(io.BytesIO(excel_bytes))
+
+        petty_data = {}
+        for sheet_name, label in PETTY_CASH_SHEETS:
+            if sheet_name not in xl.sheet_names:
+                continue
+            df = pd.read_excel(io.BytesIO(excel_bytes), sheet_name=sheet_name, header=None)
+            petty_data[label] = _parse_petty_month_sheet(df)
+
+        return petty_data
+    except Exception:
+        return {}
+
+
 @st.cache_data(ttl=0)
 def load_leela_data():
     """Load Leela Fund expenditure data from Sheet5 (col C=description, col D=amount)."""
@@ -680,128 +809,125 @@ def render_leela_fund():
         
     except Exception as e:
         st.warning(f"Leela Fund data not available: {e}")
-    
 
 
 def render_petty_cash():
-    """Render Petty Cash monthly details section."""
-    st.markdown("<div class='sec-header' style='background:linear-gradient(90deg,#312E81,#6366F1);margin-top:1.5rem;'>💰 Petty Cash — Monthly Expense Details (Sep 2025 – Jul 2026)</div>", unsafe_allow_html=True)
+    """Render Petty Cash monthly details loaded from the Petty Cash Excel workbook."""
+    petty_data = load_petty_cash_data()
+    if not petty_data:
+        st.warning("Petty Cash data not available.")
+        return
 
-    # Overall summary cards
-    TOTAL_CR = 147690
-    TOTAL_DB = 147042
-    OB_SEP   = -20909
-    OVERALL_CB = OB_SEP + TOTAL_CR - TOTAL_DB  # = -20,261
+    month_keys = list(petty_data.keys())
+    first_month = month_keys[0]
+    last_month = month_keys[-1]
+    ob_sep = petty_data[first_month]["ob"]
+    total_cr = sum(m["tc"] for m in petty_data.values())
+    total_db = sum(m["td"] for m in petty_data.values())
+    overall_cb = petty_data[last_month]["cb"]
+
+    st.markdown(
+        "<div class='sec-header' "
+        "style='background:linear-gradient(90deg,#312E81,#6366F1);margin-top:1.5rem;'>"
+        f"💵 Petty Cash - Monthly Expense Details ({first_month} - {last_month})</div>",
+        unsafe_allow_html=True,
+    )
+
     st.markdown(f"""
     <div class='metric-row'>
       <div class='metric-card' style='background:linear-gradient(135deg,#312E81,#6366F1);'>
-        <div class='metric-label'>Opening Balance (Sep 2025)</div>
-        <div class='metric-value'>-₹20,909</div>
+        <div class='metric-label'>Opening Balance ({first_month})</div>
+        <div class='metric-value'>-₹{abs(ob_sep):,.0f}</div>
         <div class='metric-sub'>Carried forward from previous period</div>
       </div>
       <div class='metric-card mc-green'>
-        <div class='metric-label'>Total Credited (Sep–Jul)</div>
-        <div class='metric-value'>₹{TOTAL_CR:,.0f}</div>
-        <div class='metric-sub'>Across all 11 months</div>
+        <div class='metric-label'>Total Credited</div>
+        <div class='metric-value'>₹{total_cr:,.0f}</div>
+        <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card mc-red'>
-        <div class='metric-label'>Total Debited (Sep–Jul)</div>
-        <div class='metric-value'>₹{TOTAL_DB:,.0f}</div>
-        <div class='metric-sub'>Across all 11 months</div>
+        <div class='metric-label'>Total Debited</div>
+        <div class='metric-value'>₹{total_db:,.0f}</div>
+        <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card' style='background:linear-gradient(135deg,#1E3A5F,#2563EB);'>
-        <div class='metric-label'>Closing Balance (Jul 2026)</div>
-        <div class='metric-value'>-₹{abs(OVERALL_CB):,.0f}</div>
-        <div class='metric-sub'>-20,909 + 1,47,690 − 1,47,042 = -₹{abs(OVERALL_CB):,.0f}</div>
+        <div class='metric-label'>Closing Balance ({last_month})</div>
+        <div class='metric-value'>-₹{abs(overall_cb):,.0f}</div>
+        <div class='metric-sub'>{ob_sep:,.0f} + {total_cr:,.0f} - {total_db:,.0f} = {overall_cb:,.0f}</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Month data
-    PETTY_DATA = {
-        'Sep 2025': {'ob':-20909,'tc':9030,'td':16407,'cb':-28286,'rows':[
-            ['1','01-Sep-25','Helpdesk mobile recharge','Amar Suryawanshi','online','',301],['2','02-Sep-25','Refilling for xerox machine','Nitin Agale','online','',350],['3','02-Sep-25','Booster pump maintenance material','Nitin Agale','online','',440],['4','04-Sep-25','Maid Card','Helpdesk','Cash',30,''],['5','05-Sep-25','Housekeeping material (Thaapi,khurp)','Nitin Agale','online','',280],['6','06-Sep-25','Maintenance material of WTP plant','Nitin Agale','online','',40],['7','07-Sep-25','Petty Cash — Clubhouse booking (Shruti yoga)','Amar Suryawanshi','online',3000,''],['8','09-Sep-25','Electric use (tape)','Nitin Agale','online','',50],['9','09-Sep-25','Electric material (LED tube 4)','Amar Suryawanshi','online','',7750],['10','12-Sep-25','Petty Cash — NBH Activity MILK Sampling','Amar Suryawanshi','online',6000,''],['11','16-Sep-25','Federation letter pad & stamp','Amar Suryawanshi','online','',6875],['12','18-Sep-25','HK staff tea & biscuits','Nitin Agale','online','',90],['13','19-Sep-25','Petrol allowance — Post Register','Nitin Agale','online','',81],['14','21-Sep-25','AI colour print — Zen Estate Amenities','Amar Suryawanshi','online','',150]]},
-        'Oct 2025': {'ob':-28286,'tc':33000,'td':18957,'cb':-14243,'rows':[
-            ['1','01-Oct-25','Helpdesk mobile recharge','Amar Suryawanshi','online','',301],['2','01-Oct-25','Mobile recharge Feb25-Jul25 (6 months)','Amar Suryawanshi','online','',1800],['3','03-Oct-25','Petty Cash — Vegetable shops','Amar Suryawanshi','online',5000,''],['4','03-Oct-25','Petty Cash — Chips shops','Amar Suryawanshi','online',3000,''],['5','03-Oct-25','Petty Cash — Fruits shops','Amar Suryawanshi','online',3000,''],['6','04-Oct-25','Domestic pump gasket','Nitin Agale','online','',180],['7','08-Oct-25','Petty Cash — Clubhouse booking (Lifestyle event)','Amar Suryawanshi','online',7000,''],['8','08-Oct-25','Tea for federation meeting','Nitin Agale','online','',60],['9','13-Oct-25','Petty Cash — Clubhouse booking (Sujit Parmar)','Amar Suryawanshi','online',2000,''],['10','13-Oct-25','Electrical material','Nitin Agale','online','',80],['11','14-Oct-25','Performance bonus plumber & MST','Amar Suryawanshi','online','',2000],['12','14-Oct-25','Tea — Ganesh Mandal stage','Amar Suryawanshi','online','',72],['13','14-Oct-25','Electrical tape','Nitin Agale','online','',30],['14','16-Oct-25','D-Mart bags — Diwali gift packing','Amar Suryawanshi','online','',1073],['15','16-Oct-25','Petrol allowance — Kharadi','Amar Suryawanshi','online','',80],['16','16-Oct-25','Petty Cash — Shopping stalls','Amar Suryawanshi','online',10000,''],['17','19-Oct-25','Garden tools and accessories','Amar Suryawanshi','online','',500],['18','19-Oct-25','Smart profile light & cable — gate','Amar Suryawanshi','online','',11800],['19','27-Oct-25','Lock for swimming pool gate','Bhamare Uncle','online','',150],['20','29-Oct-25','Helpdesk mobile recharge','Amar Suryawanshi','online','',301],['21','29-Oct-25','WTP plant suction pump UPVC pipe repair','Amar Suryawanshi','online','',280],['22','31-Oct-25','Petty Cash — Vegetable shops','Amar Suryawanshi','online',3000,''],['23','31-Oct-25','Common drainage plumbing material','Nitin Agale','online','',180],['24','31-Oct-25','Tea — pipe leakage work','HK Supervisor','online','',70]]},
-        'Nov 2025': {'ob':-14243,'tc':18500,'td':16048,'cb':-11791,'rows':[
-            ['1','01-Nov-25','Federation certificate lamination','Amar Suryawanshi','online','',20],['2','01-Nov-25','Tea & water — federation meeting','Nitin Agale','online','',240],['3','07-Nov-25','Petrol allowance — PMC office (3x)','Amar Suryawanshi','online','',240],['4','08-Nov-25','Tea & water — federation meeting (8 Nov)','Nitin Agale','online','',336],['5','10-Nov-25','Domestic outlet line major repair','Nitin Agale','online','',760],['6','11-Nov-25','Performance bonus plumber & MST','Amar Suryawanshi','online','',2000],['7','11-Nov-25','Common area spring','Nitin Agale','online','',85],['8','13-Nov-25','Petrol allowance — Bank office (3x)','Amar Suryawanshi','online','',100],['9','15-Nov-25','Tea & water — federation meeting','Nitin Agale','online','',240],['10','17-Nov-25','Electric wire tape','Saddam Shaikh','online','',75],['11','17-Nov-25','60 nos LED Tubelight','Amar Suryawanshi','online','',9300],['12','20-Nov-25','Exit Board 2×2 vinyl with foam','Amar Suryawanshi','online','',1400],['13','21-Nov-25','Petty Cash — Vegetable shops','Amar Suryawanshi','online',3000,''],['14','21-Nov-25','Petty Cash — Chips shops','Amar Suryawanshi','online',3000,''],['15','21-Nov-25','Petty Cash — Fruits shops','Amar Suryawanshi','online',3000,''],['16','24-Nov-25','GYM Trainer Charges (Harshal)','Amar Suryawanshi','online',3500,''],['17','26-Nov-25','Petrol allowance — Bank office','Nitin Agale','online','',100],['18','27-Nov-25','SID Farm Milk — Revenue Generation','Amar Suryawanshi','online',6000,''],['19','29-Nov-25','Ganesh Enterprises (Dairy)','Amar Suryawanshi','cash','',180],['20','30-Nov-25','Bikaner samosa & tea — Security sendoff','Amar Suryawanshi','cash','',972]]},
-        'Dec 2025': {'ob':-11791,'tc':9030,'td':6142,'cb':-8903,'rows':[
-            ['1','01-Dec-25','Helpdesk Mobile Recharge','Amar Suryawanshi','online','',301],['2','03-Dec-25','Zen Pharma Mask to OPL Housekeeping','Amar Suryawanshi','online','',100],['3','03-Dec-25','Garbage Room Thermacol Fixing','Amar Suryawanshi','online','',190],['4','04-Dec-25','Performance bonus plumber & MST','Amar Suryawanshi','online','',2000],['5','10-Dec-25','Petrol allowance — Bank office','Amar Suryawanshi','online','',100],['6','10-Dec-25','Petty Cash — Chips shops','Amar Suryawanshi','cash',3000,''],['7','11-Dec-25','Petty Cash — Vegetable shops','Amar Suryawanshi','online',3000,''],['8','11-Dec-25','Star Fitness GYM Maintenance quotation','','','',300],['9','17-Dec-25','Petrol allowance — Bank office','Amar Suryawanshi','online','',100],['10','19-Dec-25','Petty Cash — Fruits shops','Amar Suryawanshi','online',3000,''],['11','22-Dec-25','B1 Common Plumbing Work UPVC Material','Amar Suryawanshi','online','',150],['12','26-Dec-25','Gym main glass door center lock','Amar Suryawanshi','cash','',2000],['13','27-Dec-25','Drain line elbow leakage work','Amar Suryawanshi','online','',120],['14','27-Dec-25','Federation meeting tea & water','Amar Suryawanshi','online','',100],['15','29-Dec-25','Toner Refilling Charges','Amar Suryawanshi','online','',380],['16','29-Dec-25','Helpdesk Mobile Recharge','Amar Suryawanshi','online','',301],['17','30-Dec-25','Maid Card','Helpdesk','cash',30,'']]},
-        'Jan 2026': {'ob':-8903,'tc':11560,'td':18911,'cb':-16254,'rows':[
-            ['1','02-Jan-26','Petty Cash — Chips shops','Amar Suryawanshi','online',3000,''],['2','06-Jan-26','Play area Ghare bor fitting charges','Amar Suryawanshi','online','',160],['3','09-Jan-26','Petty Cash — Fruits shops','','',3000,''],['4','10-Jan-26','Dance class revenue (Sneha Bhattacharya)','Amar Suryawanshi','online',2500,''],['5','15-Jan-26','Water TDS Meter','Blinkit','online','',240],['6','16-Jan-26','Petty Cash — Vegetable shops','Amar Suryawanshi','online',3000,''],['7','17-Jan-26','Federation meeting tea & water','Amar Suryawanshi','online','',240],['8','17-Jan-26','Clubhouse MCB & STP Plant MCB','Amar Suryawanshi','online','',3730],['9','17-Jan-26','Kids play area merry go round repair','Dighe Annasaheb','cash','',5540],['10','18-Jan-26','Fitness Shop GYM Maintenance','The Fitness Shop','cash','',413],['11','19-Jan-26','Maid Card','Helpdesk','cash',30,''],['12','22-Jan-26','Maid Card','Helpdesk','cash',30,''],['13','22-Jan-26','Petrol allowance — PMC office (2x)','Amar Suryawanshi','cash','',300],['14','25-Jan-26','Cultural sound system + transport','Roxy (Harman Electronics)','online','',3670],['15','27-Jan-26','Helpdesk Mobile Recharge','Amar Suryawanshi','online','',301],['16','30-Jan-26','Purchased Sie con & Relay','Mey Aaraadhyaa Electricals','cash','',3637],['17','30-Jan-26','MST tools cupboard lock material','Uttam Hardware','cash','',410],['18','30-Jan-26','Plug Bond Solution','Uttam Hardware','cash','',270]]},
-        'Feb 2026': {'ob':-16254,'tc':22150,'td':19703,'cb':-15527,'rows':[
-            ['1','01-Feb-26','Sachin Hatvalne','Amar Suryawanshi','online',2500,''],['2','03-Feb-26','Maid Card','Helpdesk','cash',30,''],['3','05-Feb-26','NBH pinless pool wiring material','Jai Shree Hardware','cash','',3375],['4','05-Feb-26','A Wing shop extra connection work','Jai Shree Hardware','cash','',106],['5','06-Feb-26','Cable & Siemens Relay','Mey Aaraadhyaa Electricals','cash','',7921],['6','06-Feb-26','Petty Cash — Chips shops','Amar Suryawanshi','online',3000,''],['7','06-Feb-26','Petty Cash — Fruits shops','Amar Suryawanshi','online',3000,''],['8','08-Feb-26','Basement BSC Powder cleaning material','Vinayak Hardware','cash','',520],['9','09-Feb-26','Maid Card','Helpdesk','cash',30,''],['10','09-Feb-26','Maid Card','Helpdesk','cash',30,''],['11','09-Feb-26','Maid Card','Helpdesk','cash',30,''],['12','12-Feb-26','Petty Cash — Vegetable shops','Amar Suryawanshi','cash',3000,''],['13','13-Feb-26','Salt stirrer motor repair','Dighe Annasaheb','cash','',5000],['14','13-Feb-26','Gym Trainer revenue (Harshal)','Harshal Bhargude','online',6500,''],['15','17-Feb-26','Duplicate keys — Housekeeping Room','S Key Maker','cash','',300],['16','17-Feb-26','Duplicate keys — Club House Cultural Room','S Key Maker','cash','',300],['17','17-Feb-26','Yellow paint and brush','Uttam Hardware','cash','',200],['18','18-Feb-26','Yellow paint','Uttam Hardware','cash','',300],['19','19-Feb-26','Travelling Allowance','Nitin Agale','cash','',200],['20','20-Feb-26','Maid Card','Helpdesk','cash',30,''],['21','25-Feb-26','Helpdesk Mobile recharge','Amar Suryawanshi','online','',301],['22','25-Feb-26','WTP plant pump cable','Jai Shree Hardware','cash','',900],['23','25-Feb-26','Casing Patti — swimming pool wiring','Jai Shree Hardware','cash','',240],['24','27-Feb-26','M Seal — drainage leakage (C Wing)','Jai Shree Hardware','cash','',40],['25','28-Feb-26','Gym Trainer revenue (Harshal)','Amar Suryawanshi','online',4000,'']]},
-        'Mar 2026': {'ob':-15527,'tc':20060,'td':12483,'cb':-7950,'rows':[
-            ['1','02-Mar-26','Maid Card','Helpdesk','cash',30,''],['2','04-Mar-26','Travelling Allowance','Amar Suryawanshi','cash','',150],['3','04-Mar-26','Exa Blade for pipe cutting','Prince Pipes','cash','',20],['4','06-Mar-26','Petty Cash — Chips shops','Amar Suryawanshi','cash',3000,''],['5','06-Mar-26','Petty Cash — Fruit shops','Amar Suryawanshi','cash',3000,''],['6','07-Mar-26','Birthday Party (Mayuri Dube D Wing)','Amar Suryawanshi','cash',3000,''],['7','10-Mar-26','Garbage room waste material removal','Pampanna Chavan','cash','',2000],['8','11-Mar-26','Nitin Agale Travelling Allowance','Nitin Agale','cash','',200],['9','11-Mar-26','Insulation Tape','Uttam Hardware','cash','',450],['10','12-Mar-26','Family Function (Abhishek Agrawal C Wing)','Amar Suryawanshi','cash',1000,''],['11','12-Mar-26','Maid Card','Helpdesk','cash',30,''],['12','12-Mar-26','M-seal, Exa — common area','Astral Pipes','cash','',90],['13','13-Mar-26','Petty Cash — Vegetable shops','Amar Suryawanshi','cash',3000,''],['14','13-Mar-26','STP butterfly valve bypass line work','Jayantilal Hardware','cash','',4885],['15','14-Mar-26','Gym AC Remote Cell','Jayshree Super Mart','cash','',44],['16','15-Mar-26','M-Seal for commercial work','Uttam Hardware','cash','',30],['17','20-Mar-26','Swimming pool accessories','Uttam Hardware','cash','',970],['18','20-Mar-26','1/2 HP Motor — Common Area','Jai Shree Hardware','cash','',140],['19','26-Mar-26','Helpdesk Mobile Recharge','Amar Suryawanshi','online','',350],['20','26-Mar-26','Sneha Bhattacharya dance class fees','Amar Suryawanshi','online',4000,''],['21','27-Mar-26','Travelling Allowance','Amar Suryawanshi','online','',100],['22','27-Mar-26','Property Tax Xerox file charges','A1 Xerox','online','',54],['23','27-Mar-26','Gym Trainer revenue (Harshal)','Amar Suryawanshi','online',3000,''],['24','30-Mar-26','Tree cutting & disposal','Raju Golaskar','online','',3000]]},
-        'Apr 2026': {'ob':-7950,'tc':9120,'td':14020,'cb':-13070,'rows':[
-            ['1','04-Apr-26','Maid Card','Helpdesk','cash',30,''],['2','05-Apr-26','Basement 2 water remove pipe material','Jai Shree Hardware','online','',1040],['3','06-Apr-26','Basement 2 water plumbing material','Jai Shree Hardware','online','',560],['4','06-Apr-26','Club House fan fitting material','Jai Shree Hardware','online','',200],['5','07-Apr-26','Maid Card','Helpdesk','cash',30,''],['6','10-Apr-26','Petty Cash — Vegetable shops','Amar Suryawanshi','cash',3000,''],['7','10-Apr-26','Petty Cash — Fruit shops','Amar Suryawanshi','online',3000,''],['8','10-Apr-26','Travelling Allowance','Amar Suryawanshi','cash','',150],['9','16-Apr-26','Nitin Agale Travelling Allowance','Nitin Agale','cash','',200],['10','17-Apr-26','Petty Cash — Chips shops','Amar Suryawanshi','cash',3000,''],['11','19-Apr-26','Garbage room waste removal (2 tractor trips)','Pampanna Chavan','cash','',4000],['12','20-Apr-26','LED Tubelight','Sky Electrical Zone','online','',1560],['13','22-Apr-26','Maid Card','Helpdesk','cash',30,''],['14','23-Apr-26','Helpdesk Mobile Recharge','Amar Suryawanshi','online','',300],['15','24-Apr-26','Proton Control Pvt Ltd','Amar Suryawanshi','online','',3500],['16','25-Apr-26','Printer Toner Refilling','Om Refilling Center','online','',340],['17','25-Apr-26','Water bottle & tea — Federation meeting','Rajkamal Misal','online','',170],['18','29-Apr-26','Garbage room waste removal (1 tractor trip)','Pampanna Chavan','cash','',2000],['19','30-Apr-26','Maid Card','Helpdesk','cash',30,'']]},
-        'May 2026': {'ob':-13070,'tc':6090,'td':3080,'cb':-15660,'rows':[
-            ['1','02-May-26','Maid Card','Helpdesk','cash',30,''],['2','02-May-26','Maid Card','Helpdesk','cash',30,''],['3','08-May-26','Petty Cash — Chips shops','Amar Suryawanshi','cash',3000,''],['4','11-May-26','Maid Card','Helpdesk','cash',30,''],['5','16-May-26','Exa purchased for work','Jai Shree Hardware','online','',40],['6','16-May-26','Sprite & glasses — Federation meeting','Jaishree Super Mart','online','',150],['7','16-May-26','Water bottle — Federation meeting','Zen Farma','online','',50],['8','20-May-26','Nitin Agale Travelling Allowance','Nitin Agale','online','',200],['9','20-May-26','PMC water tanker expenses','PMC Water Tanker','cash','',100],['10','21-May-26','PMC water tanker expenses','PMC Water Tanker','cash','',100],['11','22-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['12','22-May-26','Shawl for corporator Mr Bansode program','Renuka Sari Center','online','',100],['13','22-May-26','Flower bouquet — corporator Mr Bansode','Shree Ganesh Flower','online','',300],['14','22-May-26','Petty Cash — Vegetable shops','Amar Suryawanshi','cash',3000,''],['15','23-May-26','Cold drink — corporator program','Rajkamal Misal','online','',40],['16','23-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['17','24-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['18','25-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['19','26-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['20','27-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['21','28-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['22','29-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['23','30-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['24','31-May-26','PMC water tanker expenses','PMC Water Tanker','online','',200]]},
-        'Jun 2026': {'ob':-15660,'tc':6120,'td':12296,'cb':-21836,'rows':[
-            ['1','01-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['2','02-Jun-26','Main meter room lock','Jaishree Hardware','online','',70],['3','02-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['4','03-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['5','04-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',300],['6','05-Jun-26','DG auto controlling','Saie Enterprises','','',2500],['7','05-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['8','06-Jun-26','Water bottle — SGM meeting','Jayshree Super Mart','online','',336],['9','06-Jun-26','TDS Meter Cell','Medical','online','',110],['10','06-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['11','06-Jun-26','Maid Card','Helpdesk','cash',30,''],['12','07-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['13','08-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['14','09-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['15','10-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['16','11-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['17','11-Jun-26','Maid Card','Helpdesk','cash',30,''],['18','11-Jun-26','Travelling allowance','Amar Suryawanshi','online','',200],['19','12-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['20','13-Jun-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['21','14-Jun-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['22','15-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['23','15-Jun-26','Maid Card','Helpdesk','cash',30,''],['24','16-Jun-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['25','16-Jun-26','Maid Card','Helpdesk','cash',30,''],['26','17-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['27','18-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['28','19-Jun-26','Helpdesk phone recharge','Recharge','online','',300],['29','19-Jun-26','Petty cash — Chips shop','Amar Suryawanshi','cash',3000,''],['30','19-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['31','20-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['32','21-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['33','22-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['34','23-Jun-26','New Tubelight purchased','Sky Electrical Zone','cash','',3900],['35','23-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['36','24-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['37','25-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['38','26-Jun-26','Petty cash — Vegetable shop','Amar Suryawanshi','cash',3000,''],['39','27-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['40','27-Jun-26','Water bottle — Federation & CST meeting','Jayshree Super Mart','online','',80],['41','28-Jun-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['42','29-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['43','30-Jun-26','PMC water tanker expenses','PMC Water Tanker','online','',200]]},
-        'Jul 2026': {'ob':-21836,'tc':3030,'td':8995,'cb':-27801,'rows':[
-            ['1','01-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['2','02-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',100],['3','03-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['4','04-Jul-26','Travelling allowance','Amar Suryawanshi','cash','',200],['5','04-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',100],['6','05-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',100],['7','05-Jul-26','Tea — NBH team meeting','Rajkamal Misal','online','',60],['8','05-Jul-26','PVC rawal plug purchased','Jaishree Hardware','cash','',20],['9','06-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['10','07-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['11','08-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['12','09-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['13','09-Jul-26','Petty cash — Chips shop','Amar Suryawanshi','cash',3000,''],['14','10-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['15','11-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200],['16','11-Jul-26','Insulation tape purchased','Jaishree Hardware','cash','',15],['17','12-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['18','13-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['19','13-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['20','14-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['21','14-Jul-26','Tools for daily work (Spanners)','Balaji Enterprises','online','',680],['22','14-Jul-26','Rubber sheet gasket — pump room','Swaraj Enterprises','online','',1300],['23','15-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['24','16-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['25','17-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['26','18-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['27','18-Jul-26','Tea expenses for SGM','Rajkamal Misal','online','',100],['28','19-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['29','20-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['30','21-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['31','22-Jul-26','Helpdesk Phone Recharge','Jio Recharge','online','',300],['32','22-Jul-26','Distilled water purchased','Jaishree Hardware','online','',150],['33','22-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['34','23-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['35','24-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['36','24-Jul-26','Drainage choke — labour tea','Tea Shop near Zen','online','',200],['37','25-Jul-26','Paper tape purchased','Jaishree Hardware','online','',120],['38','25-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['39','26-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',100],['40','26-Jul-26','Maid card','Helpdesk','cash',30,''],['41','27-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['42','28-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['43','29-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['44','30-Jul-26','PMC water tanker expenses','PMC Water Tanker','online','',200],['45','30-Jul-26','Star screw and bit','Jaishree Hardware','cash','',50],['46','31-Jul-26','PMC water tanker expenses','PMC Water Tanker','cash','',200]]},
+    selected_m = st.selectbox("Select Month:", month_keys, key="petty_month_sel")
+    md = petty_data[selected_m]
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Opening Balance", f"-₹{abs(md['ob']):,.0f}")
+    c2.metric("Total Credited", f"₹{md['tc']:,.0f}")
+    c3.metric("Total Debited", f"₹{md['td']:,.0f}")
+    c4.metric("Closing Balance", f"-₹{abs(md['cb']):,.0f}")
+
+    month_colors = {
+        "Sep 2025": "#cce5ff", "Oct 2025": "#ffe5cc", "Nov 2025": "#d9ccff",
+        "Dec 2025": "#fff0b3", "Jan 2026": "#ffccdd", "Feb 2026": "#b3f0e0",
+        "Mar 2026": "#fff3b3", "Apr 2026": "#ccf0cc", "May 2026": "#f0ccff",
+        "Jun 2026": "#ffd6cc", "Jul 2026": "#ccf5ff", "Aug 2026": "#e8d5ff",
     }
+    bg = month_colors.get(selected_m, "#ffffff")
 
-    month_keys  = list(PETTY_DATA.keys())
-    selected_m  = st.selectbox('Select Month:', month_keys, key='petty_month_sel')
-    md          = PETTY_DATA[selected_m]
+    th_html = ""
+    for col, bk in [
+        ("#", "#312E81"), ("Date", "#374151"), ("Particulars", "#1E40AF"),
+        ("To Whom Paid", "#065F46"), ("Vr Type", "#78350F"),
+        ("Credit (₹)", "#14532D"), ("Debit (₹)", "#7F1D1D"),
+    ]:
+        align = "left" if col in ("Particulars", "To Whom Paid", "Date") else "center"
+        th_html += (
+            f'<th style="padding:8px 10px;text-align:{align};color:#fff;'
+            f'font-weight:600;font-size:10px;background:{bk};">{col}</th>'
+        )
 
-    # Month mini cards
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric('Opening Balance', f"-₹{abs(md['ob']):,.0f}")
-    c2.metric('Total Credited',  f"₹{md['tc']:,.0f}")
-    c3.metric('Total Debited',   f"₹{md['td']:,.0f}")
-    c4.metric('Closing Balance', f"-₹{abs(md['cb']):,.0f}")
-
-    # Build HTML table
-    MONTH_COLORS = {
-        'Sep 2025':'#cce5ff','Oct 2025':'#ffe5cc','Nov 2025':'#d9ccff',
-        'Dec 2025':'#fff0b3','Jan 2026':'#ffccdd','Feb 2026':'#b3f0e0',
-        'Mar 2026':'#fff3b3','Apr 2026':'#ccf0cc','May 2026':'#f0ccff',
-        'Jun 2026':'#ffd6cc','Jul 2026':'#ccf5ff'
-    }
-    bg = MONTH_COLORS.get(selected_m, '#ffffff')
-
-    th_html = ''
-    for col, bk in [('#','#312E81'),('Date','#374151'),('Particulars','#1E40AF'),
-                     ('To Whom Paid','#065F46'),('Vr Type','#78350F'),
-                     ('Credit (₹)','#14532D'),('Debit (₹)','#7F1D1D')]:
-        align = 'left' if col in ('Particulars','To Whom Paid','Date') else 'center'
-        th_html += f'<th style="padding:8px 10px;text-align:{align};color:#fff;font-weight:600;font-size:10px;background:{bk};">{col}</th>'
-
-    # Opening balance row
-    rows_html = f'''<tr style="background:#EFF6FF;">
-        <td style="padding:7px 10px;text-align:center;color:#9CA3AF;font-size:10px;">—</td>
+    rows_html = f"""<tr style="background:#EFF6FF;">
+        <td style="padding:7px 10px;text-align:center;color:#9CA3AF;font-size:10px;">-</td>
         <td style="padding:7px 10px;font-size:10.5px;color:#555;"></td>
         <td style="padding:7px 10px;font-weight:600;color:#1E3A5F;">Opening Balance</td>
         <td style="padding:7px 10px;text-align:center;"></td>
         <td style="padding:7px 10px;text-align:center;"></td>
-        <td style="padding:7px 10px;text-align:right;">—</td>
+        <td style="padding:7px 10px;text-align:right;">-</td>
         <td style="padding:7px 10px;text-align:right;font-weight:600;color:#DC2626;">-₹{abs(md["ob"]):,.0f}</td>
-    </tr>'''
+    </tr>"""
 
-    for row in md['rows']:
+    for row in md["rows"]:
         sr, date, part, whom, vr_type, cr, db = row
-        cr_v = float(cr) if cr and cr != '' else 0
-        db_v = float(db) if db and db != '' else 0
-        vr_badge = ('<span style="background:#FFF3CD;color:#856404;font-size:9px;padding:1px 5px;border-radius:8px;">Cash</span>'
-                    if str(vr_type).lower() in ('cash',) else
-                    '<span style="background:#DBEAFE;color:#1E40AF;font-size:9px;padding:1px 5px;border-radius:8px;">Online</span>'
-                    if vr_type else '')
-        cr_td = f'<td style="padding:7px 10px;text-align:right;color:#15803D;font-weight:600;">₹{cr_v:,.0f}</td>' if cr_v else '<td style="padding:7px 10px;text-align:right;color:#aaa;">—</td>'
-        db_td = f'<td style="padding:7px 10px;text-align:right;color:#DC2626;font-weight:600;">₹{db_v:,.0f}</td>' if db_v else '<td style="padding:7px 10px;text-align:right;color:#aaa;">—</td>'
-        rows_html += f'''<tr style="background:{bg};border-bottom:0.5px solid #e5e7eb;">
+        cr_v = float(cr) if cr not in ("", None) else 0
+        db_v = float(db) if db not in ("", None) else 0
+        vr_badge = (
+            '<span style="background:#FFF3CD;color:#856404;font-size:9px;padding:1px 5px;border-radius:8px;">Cash</span>'
+            if str(vr_type).lower().strip() == "cash"
+            else '<span style="background:#DBEAFE;color:#1E40AF;font-size:9px;padding:1px 5px;border-radius:8px;">Online</span>'
+            if vr_type
+            else ""
+        )
+        cr_td = (
+            f'<td style="padding:7px 10px;text-align:right;color:#15803D;font-weight:600;">₹{cr_v:,.0f}</td>'
+            if cr_v
+            else '<td style="padding:7px 10px;text-align:right;color:#aaa;">-</td>'
+        )
+        db_td = (
+            f'<td style="padding:7px 10px;text-align:right;color:#DC2626;font-weight:600;">₹{db_v:,.0f}</td>'
+            if db_v
+            else '<td style="padding:7px 10px;text-align:right;color:#aaa;">-</td>'
+        )
+        rows_html += f"""<tr style="background:{bg};border-bottom:0.5px solid #e5e7eb;">
             <td style="padding:7px 10px;text-align:center;color:#9CA3AF;font-size:10px;">{sr}</td>
             <td style="padding:7px 10px;font-size:10.5px;color:#6B7280;">{date}</td>
             <td style="padding:7px 10px;text-align:left;">{part}</td>
             <td style="padding:7px 10px;text-align:center;font-size:10.5px;">{whom}</td>
             <td style="padding:7px 10px;text-align:center;">{vr_badge}</td>
             {cr_td}{db_td}
-        </tr>'''
+        </tr>"""
 
-    # Total & closing rows
-    rows_html += f'''<tr style="background:#F3F4F6;font-weight:700;border-top:2px solid #6366F1;">
+    rows_html += f"""<tr style="background:#F3F4F6;font-weight:700;border-top:2px solid #6366F1;">
         <td colspan="5" style="padding:8px 10px;text-align:right;color:#6B7280;font-size:11px;">TOTAL</td>
         <td style="padding:8px 10px;text-align:right;color:#15803D;">₹{md["tc"]:,.0f}</td>
         <td style="padding:8px 10px;text-align:right;color:#DC2626;">₹{md["td"]:,.0f}</td>
@@ -809,17 +935,20 @@ def render_petty_cash():
     <tr style="background:#FFFBEB;font-weight:700;border-top:2px solid #D97706;">
         <td colspan="5" style="padding:8px 10px;text-align:right;font-size:11px;">CLOSING BALANCE</td>
         <td colspan="2" style="padding:8px 10px;text-align:center;font-size:13px;color:#DC2626;">-₹{abs(md["cb"]):,.0f}</td>
-    </tr>'''
+    </tr>"""
 
-    st.markdown(f'''<div style="overflow-x:auto;border-radius:10px;border:0.5px solid #ddd;margin-top:.5rem;">
+    st.markdown(
+        f"""<div style="overflow-x:auto;border-radius:10px;border:0.5px solid #ddd;margin-top:.5rem;">
     <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
       <thead><tr>{th_html}</tr></thead>
       <tbody>{rows_html}</tbody>
-    </table></div>''', unsafe_allow_html=True)
+    </table></div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Jul 2026)</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Aug 2026)</h1>', unsafe_allow_html=True)
     
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
@@ -944,8 +1073,9 @@ def main():
             # Leela Fund Details (right after Monthly Overview)
             render_leela_fund()
 
+            # Petty Cash Details (loaded from Petty Cash Excel workbook)
+            render_petty_cash()
 
-            
             # Vendor Breakdown - 5 separate charts for each month
             # Extra Income
             st.markdown("""
@@ -974,10 +1104,6 @@ def main():
                 )
             
             # Wing/Shop Filter Section
-            # ── PETTY CASH DETAILS ──────────────────────────────────────────
-            render_petty_cash()
-            # ── END PETTY CASH ───────────────────────────────────────────────
-
             st.markdown("<div class='sec-header sec-orange'>🏢 Wing / Shop-Wise Analysis</div>", unsafe_allow_html=True)
             
             if not df_wings.empty:
