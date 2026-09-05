@@ -107,15 +107,28 @@ def _petty_signed_amount(credit, debit):
     return 0.0
 
 
+def _format_petty_amount(amount):
+    """Format signed petty cash amount for display."""
+    if amount < 0:
+        return f"-₹{abs(amount):,.0f}"
+    if amount > 0:
+        return f"₹{amount:,.0f}"
+    return "₹0"
+
+
 def apply_petty_carry_forward(petty_data):
-    """Chain each month's opening from the previous month's closing balance."""
+    """Chain opening balances and recalculate closing from Total-row debits."""
     month_keys = list(petty_data.keys())
     enriched = {}
     for i, label in enumerate(month_keys):
-        month = dict(petty_data[label])
-        if i > 0:
-            month["ob"] = enriched[month_keys[i - 1]]["cb"]
-            month["cb"] = month["ob"] + month["tc"] - month["td"]
+        raw = petty_data[label]
+        month = {
+            "tc": raw["tc"],
+            "td": raw["td"],
+            "rows": raw["rows"],
+        }
+        month["ob"] = raw["ob"] if i == 0 else enriched[month_keys[i - 1]]["cb"]
+        month["cb"] = month["ob"] + month["tc"] - month["td"]
         enriched[label] = month
     return enriched
 
@@ -429,7 +442,6 @@ def _parse_petty_month_sheet(df):
     total_credit = 0.0
     total_debit = 0.0
     excel_total_dr = None
-    excel_closing = None
     rows = []
     sr = 0
 
@@ -466,18 +478,14 @@ def _parse_petty_month_sheet(df):
             opening = _petty_signed_amount(credit, debit)
             continue
 
-        if "Closing Balance" in particulars:
-            excel_closing = _petty_signed_amount(credit, debit)
-            break
-
         if particulars == "Total" or whom == "Total":
             excel_total_dr = debit
-            break
+            continue
 
         # Summary row without a "Total" label (some sheets use a blank particulars cell)
         if not particulars and not whom and credit and debit:
             excel_total_dr = debit
-            break
+            continue
 
         if not particulars and not whom and credit == 0 and debit == 0:
             continue
@@ -497,7 +505,8 @@ def _parse_petty_month_sheet(df):
 
     tc = total_credit
     td = excel_total_dr if excel_total_dr is not None else total_debit
-    cb = excel_closing if excel_closing is not None else (opening + tc - td)
+    # Always derive closing from opening + totals (Total row is authoritative for debits)
+    cb = opening + tc - td
 
     return {
         "ob": opening,
@@ -1189,10 +1198,10 @@ def render_petty_cash(petty_data, fy_start):
     md = display_data[selected_m]
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Opening Balance", f"-₹{abs(md['ob']):,.0f}")
+    c1.metric("Opening Balance", _format_petty_amount(md['ob']))
     c2.metric("Total Credited", f"₹{md['tc']:,.0f}")
     c3.metric("Total Debited", f"₹{md['td']:,.0f}")
-    c4.metric("Closing Balance", f"-₹{abs(md['cb']):,.0f}")
+    c4.metric("Closing Balance", _format_petty_amount(md['cb']))
 
     month_colors = {
         "Sep 2025": "#cce5ff", "Oct 2025": "#ffe5cc", "Nov 2025": "#d9ccff",
@@ -1221,7 +1230,7 @@ def render_petty_cash(petty_data, fy_start):
         <td style="padding:7px 10px;text-align:center;"></td>
         <td style="padding:7px 10px;text-align:center;"></td>
         <td style="padding:7px 10px;text-align:right;">-</td>
-        <td style="padding:7px 10px;text-align:right;font-weight:600;color:#DC2626;">-₹{abs(md["ob"]):,.0f}</td>
+        <td style="padding:7px 10px;text-align:right;font-weight:600;color:#DC2626;">{_format_petty_amount(md["ob"])}</td>
     </tr>"""
 
     for row in md["rows"]:
@@ -1261,7 +1270,7 @@ def render_petty_cash(petty_data, fy_start):
     </tr>
     <tr style="background:#FFFBEB;font-weight:700;border-top:2px solid #D97706;">
         <td colspan="5" style="padding:8px 10px;text-align:right;font-size:11px;">CLOSING BALANCE</td>
-        <td colspan="2" style="padding:8px 10px;text-align:center;font-size:13px;color:#DC2626;">-₹{abs(md["cb"]):,.0f}</td>
+        <td colspan="2" style="padding:8px 10px;text-align:center;font-size:13px;color:#DC2626;">{_format_petty_amount(md["cb"])}</td>
     </tr>"""
 
     st.markdown(
