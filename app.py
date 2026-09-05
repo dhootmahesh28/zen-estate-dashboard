@@ -85,11 +85,16 @@ def filter_df_by_fy(df, fy_start):
     return df.copy()
 
 
+# Months excluded from petty cash (incomplete / unreliable data)
+PETTY_EXCLUDE_MONTHS = {"Aug 2026"}
+
+
 def filter_petty_by_fy(all_petty, fy_start):
     petty = all_petty.get(fy_start, {})
     if not petty:
         return {}
     labels = sort_month_labels(list(petty.keys()))
+    labels = [label for label in labels if label not in PETTY_EXCLUDE_MONTHS]
     return {label: petty[label] for label in labels}
 
 
@@ -113,26 +118,6 @@ def apply_petty_carry_forward(petty_data):
             month["cb"] = month["ob"] + month["tc"] - month["td"]
         enriched[label] = month
     return enriched
-
-
-def get_petty_calc_month_keys(petty_data):
-    """
-    Months included in FY totals.
-    Stops when a sheet's opening balance does not match the prior month's closing
-    (e.g. Aug 2026 draft sheet with wrong opening balance).
-    """
-    month_keys = list(petty_data.keys())
-    if not month_keys:
-        return []
-
-    calc_keys = [month_keys[0]]
-    for i in range(1, len(month_keys)):
-        prev_cb = petty_data[month_keys[i - 1]]["cb"]
-        curr_ob = petty_data[month_keys[i]]["ob"]
-        if abs(prev_cb - curr_ob) > 0.5:
-            break
-        calc_keys.append(month_keys[i])
-    return calc_keys
 
 
 def get_available_financial_years(petty_by_fy, df_monthly):
@@ -1151,24 +1136,15 @@ def render_petty_cash(petty_data, fy_start):
         return
 
     month_keys = list(petty_data.keys())
-    calc_month_keys = get_petty_calc_month_keys(petty_data)
     display_data = apply_petty_carry_forward(petty_data)
 
-    first_month = calc_month_keys[0]
-    calc_last_month = calc_month_keys[-1]
+    first_month = month_keys[0]
+    last_month = month_keys[-1]
     ob_sep = display_data[first_month]["ob"]
-    total_cr = sum(display_data[m]["tc"] for m in calc_month_keys)
-    total_db = sum(display_data[m]["td"] for m in calc_month_keys)
-    overall_cb = display_data[calc_last_month]["cb"]
-    month_range = f"{first_month.split()[0]} – {calc_last_month.split()[0]}"
-
-    excluded = [m for m in month_keys if m not in calc_month_keys]
-    if excluded:
-        st.info(
-            f"**Note:** {', '.join(excluded)} excluded from FY totals — "
-            f"opening balance does not match {calc_last_month} closing "
-            f"(₹{overall_cb:,.0f}). Final closing balance is **₹{overall_cb:,.0f}**."
-        )
+    total_cr = sum(display_data[m]["tc"] for m in month_keys)
+    total_db = sum(display_data[m]["td"] for m in month_keys)
+    overall_cb = display_data[last_month]["cb"]
+    month_range = f"{first_month.split()[0]} – {last_month.split()[0]}"
 
     st.markdown(
         "<div class='sec-header' "
@@ -1187,15 +1163,15 @@ def render_petty_cash(petty_data, fy_start):
       <div class='metric-card mc-green'>
         <div class='metric-label'>Total Credited ({month_range})</div>
         <div class='metric-value'>₹{total_cr:,.0f}</div>
-        <div class='metric-sub'>Across {len(calc_month_keys)} months</div>
+        <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card mc-red'>
         <div class='metric-label'>Total Debited ({month_range})</div>
         <div class='metric-value'>₹{total_db:,.0f}</div>
-        <div class='metric-sub'>Across {len(calc_month_keys)} months</div>
+        <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card' style='background:linear-gradient(135deg,#1E3A5F,#2563EB);'>
-        <div class='metric-label'>Closing Balance ({calc_last_month})</div>
+        <div class='metric-label'>Closing Balance ({last_month})</div>
         <div class='metric-value'>-₹{abs(overall_cb):,.0f}</div>
         <div class='metric-sub'>{ob_sep:,.0f} + {total_cr:,.0f} - {total_db:,.0f} = {overall_cb:,.0f}</div>
       </div>
