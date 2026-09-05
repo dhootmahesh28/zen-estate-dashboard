@@ -93,6 +93,48 @@ def filter_petty_by_fy(all_petty, fy_start):
     return {label: petty[label] for label in labels}
 
 
+def _petty_signed_amount(credit, debit):
+    """Return signed ledger amount from credit/debit columns."""
+    if credit != 0:
+        return credit
+    if debit != 0:
+        return -abs(debit) if debit > 0 else debit
+    return 0.0
+
+
+def apply_petty_carry_forward(petty_data):
+    """Chain each month's opening from the previous month's closing balance."""
+    month_keys = list(petty_data.keys())
+    enriched = {}
+    for i, label in enumerate(month_keys):
+        month = dict(petty_data[label])
+        if i > 0:
+            month["ob"] = enriched[month_keys[i - 1]]["cb"]
+            month["cb"] = month["ob"] + month["tc"] - month["td"]
+        enriched[label] = month
+    return enriched
+
+
+def get_petty_calc_month_keys(petty_data):
+    """
+    Months included in FY totals.
+    Stops when a sheet's opening balance does not match the prior month's closing
+    (e.g. Aug 2026 draft sheet with wrong opening balance).
+    """
+    month_keys = list(petty_data.keys())
+    if not month_keys:
+        return []
+
+    calc_keys = [month_keys[0]]
+    for i in range(1, len(month_keys)):
+        prev_cb = petty_data[month_keys[i - 1]]["cb"]
+        curr_ob = petty_data[month_keys[i]]["ob"]
+        if abs(prev_cb - curr_ob) > 0.5:
+            break
+        calc_keys.append(month_keys[i])
+    return calc_keys
+
+
 def get_available_financial_years(petty_by_fy, df_monthly):
     fys = set(petty_by_fy.keys())
     if df_monthly is not None and not df_monthly.empty and 'FY_Start' in df_monthly.columns:
@@ -436,11 +478,11 @@ def _parse_petty_month_sheet(df):
         date_val = row.iloc[1] if len(row) > 1 else ""
 
         if whom == "Opening Balance":
-            opening = credit
+            opening = _petty_signed_amount(credit, debit)
             continue
 
         if "Closing Balance" in particulars:
-            excel_closing = credit if credit != 0 else debit
+            excel_closing = _petty_signed_amount(credit, debit)
             break
 
         if particulars == "Total" or whom == "Total":
@@ -1109,13 +1151,24 @@ def render_petty_cash(petty_data, fy_start):
         return
 
     month_keys = list(petty_data.keys())
-    first_month = month_keys[0]
-    calc_last_month = month_keys[-1]
-    ob_sep = petty_data[first_month]["ob"]
-    total_cr = sum(m["tc"] for m in petty_data.values())
-    total_db = sum(m["td"] for m in petty_data.values())
-    overall_cb = petty_data[calc_last_month]["cb"]
+    calc_month_keys = get_petty_calc_month_keys(petty_data)
+    display_data = apply_petty_carry_forward(petty_data)
+
+    first_month = calc_month_keys[0]
+    calc_last_month = calc_month_keys[-1]
+    ob_sep = display_data[first_month]["ob"]
+    total_cr = sum(display_data[m]["tc"] for m in calc_month_keys)
+    total_db = sum(display_data[m]["td"] for m in calc_month_keys)
+    overall_cb = display_data[calc_last_month]["cb"]
     month_range = f"{first_month.split()[0]} – {calc_last_month.split()[0]}"
+
+    excluded = [m for m in month_keys if m not in calc_month_keys]
+    if excluded:
+        st.info(
+            f"**Note:** {', '.join(excluded)} excluded from FY totals — "
+            f"opening balance does not match {calc_last_month} closing "
+            f"(₹{overall_cb:,.0f}). Final closing balance is **₹{overall_cb:,.0f}**."
+        )
 
     st.markdown(
         "<div class='sec-header' "
@@ -1134,12 +1187,12 @@ def render_petty_cash(petty_data, fy_start):
       <div class='metric-card mc-green'>
         <div class='metric-label'>Total Credited ({month_range})</div>
         <div class='metric-value'>₹{total_cr:,.0f}</div>
-        <div class='metric-sub'>Across {len(month_keys)} months</div>
+        <div class='metric-sub'>Across {len(calc_month_keys)} months</div>
       </div>
       <div class='metric-card mc-red'>
         <div class='metric-label'>Total Debited ({month_range})</div>
         <div class='metric-value'>₹{total_db:,.0f}</div>
-        <div class='metric-sub'>Across {len(month_keys)} months</div>
+        <div class='metric-sub'>Across {len(calc_month_keys)} months</div>
       </div>
       <div class='metric-card' style='background:linear-gradient(135deg,#1E3A5F,#2563EB);'>
         <div class='metric-label'>Closing Balance ({calc_last_month})</div>
@@ -1157,7 +1210,7 @@ def render_petty_cash(petty_data, fy_start):
             unsafe_allow_html=True,
         )
         selected_m = st.selectbox("📅 Select Month:", month_keys, key=f"petty_month_sel_{fy_start}")
-    md = petty_data[selected_m]
+    md = display_data[selected_m]
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Opening Balance", f"-₹{abs(md['ob']):,.0f}")
