@@ -114,58 +114,139 @@ st.set_page_config(
 st.markdown("""
     <style>
     /* ── Page background ── */
-    .stApp { background: #f4f6fa; }
+    .stApp {
+        background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 35%, #f1f5f9 100%);
+    }
+
+    /* Hide default Streamlit header/footer clutter */
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
 
     /* ── Main title ── */
     .main-header {
-        font-size: 2.2rem;
-        font-weight: 700;
+        font-size: 2.35rem;
+        font-weight: 800;
         color: #ffffff;
         text-align: center;
-        padding: 1.2rem 1.5rem;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-        margin-bottom: 1.5rem;
-        letter-spacing: 0.02em;
-        text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+        padding: 1.35rem 1.5rem;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%);
+        margin-bottom: 1.25rem;
+        letter-spacing: 0.03em;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.45);
+        border: 2px solid rgba(255,255,255,0.15);
+        box-shadow: 0 10px 30px rgba(30, 58, 138, 0.35);
         -webkit-text-fill-color: #ffffff;
+    }
+
+    /* ── Financial year control panel banner ── */
+    .fy-panel-banner {
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 55%, #60a5fa 100%);
+        color: #fff;
+        padding: 14px 20px;
+        border-radius: 14px 14px 0 0;
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin-bottom: 0;
+        box-shadow: inset 0 -2px 0 rgba(255,255,255,0.2);
+    }
+
+    /* ── Active FY badge ── */
+    .fy-active-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, #059669, #10b981);
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.95rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        margin: 0.75rem 0 1rem 0;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+        border: 2px solid rgba(255,255,255,0.35);
+        letter-spacing: 0.02em;
     }
 
     /* ── Section headers ── */
     .sec-header {
         color: white;
-        padding: 11px 18px;
+        padding: 12px 20px;
         border-radius: 12px;
-        font-size: 1.05rem;
-        font-weight: 600;
-        margin: 1.2rem 0 0.7rem 0;
+        font-size: 1.08rem;
+        font-weight: 800;
+        margin: 1.2rem 0 0.8rem 0;
         display: flex;
         align-items: center;
         gap: 8px;
+        letter-spacing: 0.03em;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+        border: 1px solid rgba(255,255,255,0.2);
     }
-    .sec-blue   { background: linear-gradient(90deg, #185FA5, #378ADD); }
-    .sec-green  { background: linear-gradient(90deg, #3B6D11, #639922); }
-    .sec-purple { background: linear-gradient(90deg, #3C3489, #7F77DD); }
-    .sec-orange { background: linear-gradient(90deg, #993C1D, #D85A30); }
-    .sec-pink   { background: linear-gradient(90deg, #993556, #D4537E); }
-    .sec-teal   { background: linear-gradient(90deg, #0F6E56, #1D9E75); }
+    .sec-blue   { background: linear-gradient(90deg, #1e40af, #3b82f6); }
+    .sec-green  { background: linear-gradient(90deg, #166534, #22c55e); }
+    .sec-purple { background: linear-gradient(90deg, #5b21b6, #8b5cf6); }
+    .sec-orange { background: linear-gradient(90deg, #c2410c, #f97316); }
+    .sec-pink   { background: linear-gradient(90deg, #be185d, #ec4899); }
+    .sec-teal   { background: linear-gradient(90deg, #0f766e, #14b8a6); }
 
     /* ── Metric cards ── */
-    .metric-row { display: flex; gap: 12px; margin-bottom: 1rem; }
+    .metric-row { display: flex; gap: 14px; margin-bottom: 1.1rem; }
     .metric-card {
         flex: 1;
-        border-radius: 12px;
-        padding: 14px 16px;
+        border-radius: 14px;
+        padding: 16px 18px;
         color: white;
         min-width: 0;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+        border: 1px solid rgba(255,255,255,0.22);
+        transition: transform 0.15s ease;
     }
-    .mc-blue   { background: linear-gradient(135deg, #185FA5, #378ADD); }
-    .mc-green  { background: linear-gradient(135deg, #3B6D11, #639922); }
-    .mc-amber  { background: linear-gradient(135deg, #854F0B, #BA7517); }
-    .mc-red    { background: linear-gradient(135deg, #A32D2D, #E24B4A); }
-    .metric-label { font-size: 0.7rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-    .metric-value { font-size: 1.35rem; font-weight: 600; }
-    .metric-sub   { font-size: 0.68rem; opacity: 0.75; margin-top: 3px; }
+    .metric-card:hover { transform: translateY(-2px); }
+    .mc-blue   { background: linear-gradient(145deg, #1d4ed8, #3b82f6); }
+    .mc-green  { background: linear-gradient(145deg, #15803d, #22c55e); }
+    .mc-amber  { background: linear-gradient(145deg, #b45309, #f59e0b); }
+    .mc-red    { background: linear-gradient(145deg, #b91c1c, #ef4444); }
+    .metric-label {
+        font-size: 0.72rem;
+        opacity: 0.92;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 6px;
+        font-weight: 700;
+    }
+    .metric-value { font-size: 1.45rem; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .metric-sub   { font-size: 0.72rem; opacity: 0.88; margin-top: 5px; font-weight: 600; }
+
+    /* ── Streamlit tabs styling ── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+        background: linear-gradient(135deg, #e0e7ff, #dbeafe);
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 2px solid #93c5fd;
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 52px;
+        white-space: pre-wrap;
+        background-color: rgba(255,255,255,0.65);
+        border-radius: 10px;
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+        color: #1e3a8a !important;
+        border: 2px solid transparent !important;
+        padding: 8px 16px !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #1e40af, #2563eb) !important;
+        color: #ffffff !important;
+        border: 2px solid #1d4ed8 !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+    }
+    .stTabs [data-baseweb="tab-panel"] {
+        padding-top: 1.25rem;
+    }
 
     /* ── Petty cash month picker highlight ── */
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) {
@@ -197,24 +278,48 @@ st.markdown("""
 
     /* ── Financial year selector highlight ── */
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) {
-        background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 50%, #93C5FD 100%) !important;
+        background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
         border: 3px solid #2563EB !important;
-        border-radius: 14px !important;
-        padding: 18px 22px 14px 22px !important;
-        margin: 0 0 1.2rem 0 !important;
-        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3) !important;
+        border-radius: 16px !important;
+        padding: 0 22px 18px 22px !important;
+        margin: 0 0 0.5rem 0 !important;
+        box-shadow: 0 8px 24px rgba(37, 99, 235, 0.28) !important;
+        overflow: hidden;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) [data-testid="stSelectbox"] label p {
-        font-size: 1.15rem !important;
+        font-size: 1.2rem !important;
         font-weight: 800 !important;
         color: #1E3A8A !important;
+        letter-spacing: 0.03em !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div {
         background: #FFFFFF !important;
         border: 2px solid #1D4ED8 !important;
-        border-radius: 10px !important;
-        min-height: 50px !important;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 3px rgba(59, 130, 246, 0.35) !important;
+        border-radius: 12px !important;
+        min-height: 54px !important;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 4px rgba(59, 130, 246, 0.25) !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div > div {
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        color: #1e3a8a !important;
+    }
+
+    /* ── Streamlit metrics in tabs ── */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, #f8fafc, #eef2ff);
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid #cbd5e1;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    [data-testid="stMetricLabel"] {
+        font-weight: 700 !important;
+        color: #475569 !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-weight: 800 !important;
+        color: #0f172a !important;
     }
 
     /* ── Dataframe headers — ALL tables ── */
@@ -235,6 +340,13 @@ st.markdown("""
         text-align: center !important;
         padding: 10px !important;
         font-size: 1rem !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stDataFrame"] table tbody tr:nth-child(even) td {
+        background-color: #f1f5f9 !important;
+    }
+    div[data-testid="stDataFrame"] table tbody tr:hover td {
+        background-color: #e0e7ff !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -1147,14 +1259,27 @@ def main():
     with st.container(border=True):
         st.markdown('<span id="fy-picker-marker"></span>', unsafe_allow_html=True)
         st.markdown(
-            "<p style='margin:0 0 12px 0;color:#1E3A8A;font-weight:700;font-size:0.95rem;'>"
-            "📅 Select Financial Year to view dashboard data</p>",
+            "<div class='fy-panel-banner'>📅 Select Financial Year</div>",
             unsafe_allow_html=True,
         )
-        selected_fy_label = st.selectbox("Financial Year:", list(fy_options.keys()), key="fy_selector")
+        st.markdown(
+            "<p style='margin:14px 0 10px 0;color:#1E3A8A;font-weight:800;font-size:1rem;"
+            "letter-spacing:0.02em;'>Choose the year to view all dashboard sections</p>",
+            unsafe_allow_html=True,
+        )
+        selected_fy_label = st.selectbox(
+            "Financial Year:",
+            list(fy_options.keys()),
+            key="fy_selector",
+            label_visibility="visible",
+        )
 
     selected_fy = fy_options[selected_fy_label]
-    st.caption(f"Showing data for **{selected_fy_label}**")
+    st.markdown(
+        f"<div class='fy-active-badge'>✓ &nbsp;Showing data for &nbsp; <span style='font-size:1.05rem;'>"
+        f"{selected_fy_label}</span></div>",
+        unsafe_allow_html=True,
+    )
 
     df_monthly = filter_df_by_fy(df_monthly_all, selected_fy)
     df_wings = filter_df_by_fy(df_wings_all, selected_fy)
