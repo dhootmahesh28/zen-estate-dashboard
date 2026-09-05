@@ -65,6 +65,34 @@ st.markdown("""
     .metric-value { font-size: 1.35rem; font-weight: 600; }
     .metric-sub   { font-size: 0.68rem; opacity: 0.75; margin-top: 3px; }
 
+    /* ── Petty cash month picker highlight ── */
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) {
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%) !important;
+        border: 3px solid #D97706 !important;
+        border-radius: 14px !important;
+        padding: 18px 22px 14px 22px !important;
+        margin: 1.2rem 0 1rem 0 !important;
+        box-shadow: 0 6px 18px rgba(217, 119, 6, 0.35) !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) [data-testid="stSelectbox"] label p {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #92400E !important;
+        letter-spacing: 0.02em !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) div[data-baseweb="select"] > div {
+        background: #FFFFFF !important;
+        border: 2px solid #B45309 !important;
+        border-radius: 10px !important;
+        min-height: 50px !important;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 3px rgba(251, 191, 36, 0.45) !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) div[data-baseweb="select"] > div > div {
+        font-size: 1.08rem !important;
+        font-weight: 700 !important;
+        color: #78350F !important;
+    }
+
     /* ── Dataframe headers — ALL tables ── */
     div[data-testid="stDataFrame"] table th,
     .dataframe th,
@@ -853,23 +881,14 @@ def render_petty_cash(petty_data):
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<span id="petty-month-anchor"></span>', unsafe_allow_html=True)
-    st.markdown("""
-    <style>
-    #petty-month-anchor ~ div [data-testid="stSelectbox"] label p {
-        font-weight: 700 !important;
-        color: #92400E !important;
-        font-size: 1.05rem !important;
-    }
-    #petty-month-anchor ~ div [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        background: #FFFBEB !important;
-        border: 2px solid #F59E0B !important;
-        border-radius: 10px !important;
-        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25) !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    selected_m = st.selectbox("📅 Select Month:", month_keys, key="petty_month_sel")
+    with st.container(border=True):
+        st.markdown('<span id="petty-picker-marker"></span>', unsafe_allow_html=True)
+        st.markdown(
+            "<p style='margin:0 0 12px 0;color:#92400E;font-weight:700;font-size:0.95rem;'>"
+            "👇 Choose a month below to view petty cash transactions</p>",
+            unsafe_allow_html=True,
+        )
+        selected_m = st.selectbox("📅 Select Month:", month_keys, key="petty_month_sel")
     md = petty_data[selected_m]
 
     c1, c2, c3, c4 = st.columns(4)
