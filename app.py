@@ -87,7 +87,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=0)
+@st.cache_data(show_spinner=False)
 def load_excel_from_github():
     """Load Excel file directly from GitHub repository"""
     # GitHub raw file URL - UPDATE THIS with your actual file URL
@@ -213,7 +213,7 @@ def _parse_petty_month_sheet(df):
     }
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(show_spinner=False)
 def load_petty_cash_data():
     """Load petty cash monthly data from the Petty Cash Excel workbook."""
     try:
@@ -222,14 +222,13 @@ def load_petty_cash_data():
 
         response = requests.get(PETTY_CASH_URL, timeout=30)
         response.raise_for_status()
-        excel_bytes = response.content
-        xl = pd.ExcelFile(io.BytesIO(excel_bytes))
+        xl = pd.ExcelFile(io.BytesIO(response.content))
 
         petty_data = {}
         for sheet_name, label in PETTY_CASH_SHEETS:
             if sheet_name not in xl.sheet_names:
                 continue
-            df = pd.read_excel(io.BytesIO(excel_bytes), sheet_name=sheet_name, header=None)
+            df = xl.parse(sheet_name, header=None)
             petty_data[label] = _parse_petty_month_sheet(df)
 
         return petty_data
@@ -237,7 +236,7 @@ def load_petty_cash_data():
         return {}
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(show_spinner=False)
 def load_leela_data():
     """Load Leela Fund expenditure data from Sheet5 (col C=description, col D=amount)."""
     try:
@@ -261,7 +260,7 @@ def load_leela_data():
     except Exception as e:
         return pd.DataFrame()
 
-@st.cache_data(ttl=0)
+@st.cache_data(show_spinner=False)
 def load_excel_data(file):
     """Load all financial data from Excel"""
     try:
@@ -703,14 +702,12 @@ def render_html_table(df, fmt=None):
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_leela_fund():
+def render_leela_fund(df_leela):
     """Render the Leela Fund Details section."""
     st.markdown("<div class='sec-header' style='background:linear-gradient(90deg,#5B4FCF,#9B59B6);margin-top:1.5rem;'>🏦 Leela Fund Details</div>", unsafe_allow_html=True)
     
     try:
-        df_leela = load_leela_data()
-        
-        if not df_leela.empty:
+        if df_leela is not None and not df_leela.empty:
             leela_total   = 2800000
             leela_items   = df_leela.dropna(subset=['Amount']).copy()
             total_spent   = leela_items['Amount'].sum()
@@ -810,9 +807,8 @@ def render_leela_fund():
         st.warning(f"Leela Fund data not available: {e}")
 
 
-def render_petty_cash():
+def render_petty_cash(petty_data):
     """Render Petty Cash monthly details loaded from the Petty Cash Excel workbook."""
-    petty_data = load_petty_cash_data()
     if not petty_data:
         st.warning("Petty Cash data not available.")
         return
@@ -968,6 +964,8 @@ def main():
     # Auto-load data from GitHub (no upload needed)
     with st.spinner('Loading latest data from repository...'):
         df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines = load_excel_from_github()
+        petty_data = load_petty_cash_data()
+        df_leela = load_leela_data()
     
     if not df_monthly.empty:
             # Portfolio metric cards
@@ -1086,10 +1084,10 @@ def main():
             st.markdown("---")
 
             # Leela Fund Details (right after Monthly Overview)
-            render_leela_fund()
+            render_leela_fund(df_leela)
 
             # Petty Cash Details (loaded from Petty Cash Excel workbook)
-            render_petty_cash()
+            render_petty_cash(petty_data)
 
             # Vendor Breakdown - 5 separate charts for each month
             # Extra Income
