@@ -88,6 +88,21 @@ def filter_df_by_fy(df, fy_start):
 # Months excluded from petty cash (incomplete / unreliable data)
 PETTY_EXCLUDE_MONTHS = {"Aug 2026"}
 
+# Authoritative sheet names in the Petty Cash Excel workbook (Sep 2025 – Jul 2026)
+PETTY_CASH_SHEETS = [
+    ("September 2025", "Sep 2025"),
+    ("October 2025", "Oct 2025"),
+    ("November 2025", "Nov 2025"),
+    ("December 2025", "Dec 2025"),
+    ("January 2026", "Jan 2026"),
+    ("Feb.2026", "Feb 2026"),
+    ("March 2026", "Mar 2026"),
+    ("April 2026", "Apr 2026"),
+    ("May 2026", "May 2026"),
+    ("June 2026", "Jun 2026"),
+    ("July 2026", "Jul 2026"),
+]
+
 
 def filter_petty_by_fy(all_petty, fy_start):
     petty = all_petty.get(fy_start, {})
@@ -96,15 +111,6 @@ def filter_petty_by_fy(all_petty, fy_start):
     labels = sort_month_labels(list(petty.keys()))
     labels = [label for label in labels if label not in PETTY_EXCLUDE_MONTHS]
     return {label: petty[label] for label in labels}
-
-
-def _petty_signed_amount(credit, debit):
-    """Return signed ledger amount from credit/debit columns."""
-    if credit != 0:
-        return credit
-    if debit != 0:
-        return -abs(debit) if debit > 0 else debit
-    return 0.0
 
 
 def _format_petty_amount(amount):
@@ -116,20 +122,25 @@ def _format_petty_amount(amount):
     return "₹0"
 
 
-def apply_petty_carry_forward(petty_data):
-    """Chain opening balances and recalculate closing from Total-row debits."""
+def enrich_petty_display(petty_data):
+    """
+    Chain opening balances month-to-month for display.
+    Sep uses Excel opening; each later month opens at the previous month's closing.
+    Closing = opening + credited − debited (Total row debits).
+    """
     month_keys = list(petty_data.keys())
     enriched = {}
     for i, label in enumerate(month_keys):
         raw = petty_data[label]
-        month = {
+        ob = raw["ob"] if i == 0 else enriched[month_keys[i - 1]]["cb"]
+        cb = ob + raw["tc"] - raw["td"]
+        enriched[label] = {
+            "ob": ob,
             "tc": raw["tc"],
             "td": raw["td"],
+            "cb": cb,
             "rows": raw["rows"],
         }
-        month["ob"] = raw["ob"] if i == 0 else enriched[month_keys[i - 1]]["cb"]
-        month["cb"] = month["ob"] + month["tc"] - month["td"]
-        enriched[label] = month
     return enriched
 
 
@@ -475,7 +486,7 @@ def _parse_petty_month_sheet(df):
         date_val = row.iloc[1] if len(row) > 1 else ""
 
         if whom == "Opening Balance":
-            opening = _petty_signed_amount(credit, debit)
+            opening = credit if credit != 0 else (-debit if debit > 0 else debit)
             continue
 
         if particulars == "Total" or whom == "Total":
@@ -485,6 +496,9 @@ def _parse_petty_month_sheet(df):
         # Summary row without a "Total" label (some sheets use a blank particulars cell)
         if not particulars and not whom and credit and debit:
             excel_total_dr = debit
+            continue
+
+        if "Closing Balance" in particulars:
             continue
 
         if not particulars and not whom and credit == 0 and debit == 0:
@@ -505,7 +519,6 @@ def _parse_petty_month_sheet(df):
 
     tc = total_credit
     td = excel_total_dr if excel_total_dr is not None else total_debit
-    # Always derive closing from opening + totals (Total row is authoritative for debits)
     cb = opening + tc - td
 
     return {
@@ -519,7 +532,7 @@ def _parse_petty_month_sheet(df):
 
 @st.cache_data(show_spinner=False, ttl=300)
 def load_petty_cash_data():
-    """Load all petty cash monthly sheets, grouped by financial year."""
+    """Load petty cash monthly sheets (Sep 2025 – Jul 2026), grouped by financial year."""
     try:
         import io
         import requests
@@ -533,21 +546,15 @@ def load_petty_cash_data():
         xl = pd.ExcelFile(io.BytesIO(response.content))
 
         petty_by_fy = {}
-        for sheet_name in xl.sheet_names:
-            if sheet_name.strip().lower() in PETTY_SKIP_SHEETS:
-                continue
-            parsed = parse_petty_sheet_name(sheet_name)
-            if not parsed:
-                continue
-            month_abbr, year, label = parsed
-            abbr_to_num = {v: k for k, v in MONTH_NUM_TO_ABBR.items()}
-            fy_start = get_fy_start(abbr_to_num[month_abbr], year)
+        abbr_to_num = {v: k for k, v in MONTH_NUM_TO_ABBR.items()}
 
+        for sheet_name, label in PETTY_CASH_SHEETS:
+            if sheet_name not in xl.sheet_names:
+                continue
+            month_abbr, year_str = label.split()
+            fy_start = get_fy_start(abbr_to_num[month_abbr], int(year_str))
             df = xl.parse(sheet_name, header=None)
             parsed_sheet = _parse_petty_month_sheet(df)
-            if not parsed_sheet.get('rows') and parsed_sheet.get('ob') == 0:
-                continue
-
             petty_by_fy.setdefault(fy_start, {})[label] = parsed_sheet
 
         return petty_by_fy
@@ -1145,7 +1152,7 @@ def render_petty_cash(petty_data, fy_start):
         return
 
     month_keys = list(petty_data.keys())
-    display_data = apply_petty_carry_forward(petty_data)
+    display_data = enrich_petty_display(petty_data)
 
     first_month = month_keys[0]
     last_month = month_keys[-1]
