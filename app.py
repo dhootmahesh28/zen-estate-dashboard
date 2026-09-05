@@ -323,6 +323,30 @@ st.markdown("""
         padding-top: 1.25rem;
     }
 
+    /* ── Global colorful dropdown styling (all selectboxes) ── */
+    [data-testid="stSelectbox"] label p {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #1E3A8A !important;
+        letter-spacing: 0.02em !important;
+    }
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%) !important;
+        border: 2px solid #1D4ED8 !important;
+        border-radius: 12px !important;
+        min-height: 52px !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 3px rgba(59, 130, 246, 0.22) !important;
+    }
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div > div {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #1e3a8a !important;
+    }
+    [data-testid="stSelectbox"] div[data-baseweb="select"] svg {
+        color: #1d4ed8 !important;
+        fill: #1d4ed8 !important;
+    }
+
     /* ── Petty cash month picker highlight ── */
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) {
         background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%) !important;
@@ -339,11 +363,11 @@ st.markdown("""
         letter-spacing: 0.02em !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) div[data-baseweb="select"] > div {
-        background: #FFFFFF !important;
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%) !important;
         border: 2px solid #B45309 !important;
         border-radius: 10px !important;
         min-height: 50px !important;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 3px rgba(251, 191, 36, 0.45) !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 3px rgba(251, 191, 36, 0.45) !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) div[data-baseweb="select"] > div > div {
         font-size: 1.08rem !important;
@@ -368,16 +392,33 @@ st.markdown("""
         letter-spacing: 0.03em !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div {
-        background: #FFFFFF !important;
+        background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 50%, #60a5fa 100%) !important;
         border: 2px solid #1D4ED8 !important;
         border-radius: 12px !important;
         min-height: 54px !important;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 4px rgba(59, 130, 246, 0.25) !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 4px rgba(59, 130, 246, 0.3) !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div > div {
         font-size: 1.1rem !important;
         font-weight: 800 !important;
         color: #1e3a8a !important;
+    }
+
+    /* ── Wing / shop selector (orange theme) ── */
+    [data-testid="stColumn"]:has(#wing-picker-marker) [data-testid="stSelectbox"] label p {
+        color: #9A3412 !important;
+    }
+    [data-testid="stColumn"]:has(#wing-picker-marker) div[data-baseweb="select"] > div {
+        background: linear-gradient(135deg, #FFEDD5 0%, #FDBA74 50%, #FB923C 100%) !important;
+        border: 2px solid #C2410C !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 3px rgba(249, 115, 22, 0.25) !important;
+    }
+    [data-testid="stColumn"]:has(#wing-picker-marker) div[data-baseweb="select"] > div > div {
+        color: #7C2D12 !important;
+    }
+    [data-testid="stColumn"]:has(#wing-picker-marker) div[data-baseweb="select"] svg {
+        color: #C2410C !important;
+        fill: #C2410C !important;
     }
 
     /* ── Streamlit metrics in tabs ── */
@@ -1387,13 +1428,12 @@ def main():
     df_fines = filter_df_by_fy(df_fines_all, selected_fy)
     petty_data = filter_petty_by_fy(petty_by_fy, selected_fy)
 
-    tab_overview, tab_leela, tab_petty, tab_extra, tab_wings, tab_downloads = st.tabs([
+    tab_overview, tab_leela, tab_petty, tab_extra, tab_wings = st.tabs([
         "📊 Overview",
         "🏦 Leela Fund",
         "💵 Petty Cash",
         "💰 Extra Income",
         "🏢 Wings & Shops",
-        "📥 Downloads",
     ])
 
     with tab_overview:
@@ -1577,6 +1617,7 @@ def main():
                 col1, col2 = st.columns([1, 3])
 
                 with col1:
+                    st.markdown('<span id="wing-picker-marker"></span>', unsafe_allow_html=True)
                     selected_wing_shop = st.selectbox(
                         'Select a Wing/Shop:', all_wings_shops, key=f'wing_shop_filter_{selected_fy}'
                     )
@@ -1713,46 +1754,6 @@ def main():
                 detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']],
                 fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Difference':'₹{:,.2f}'}
             )
-            
-    with tab_downloads:
-        st.markdown("### 📥 Download Reports")
-        if df_monthly.empty and df_wings.empty:
-            st.info(f"No CSV reports available for **{selected_fy_label}**.")
-        else:
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                if not df_monthly.empty:
-                    csv_monthly = df_monthly.to_csv(index=False)
-                    st.download_button(
-                        "📊 Monthly Summary (CSV)",
-                        csv_monthly,
-                        f"monthly_summary_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        key="dl_monthly",
-                    )
-
-            with col2:
-                if not df_wings.empty:
-                    csv_wings = df_wings.to_csv(index=False)
-                    st.download_button(
-                        "🏘️ Wing Data (CSV)",
-                        csv_wings,
-                        f"wing_data_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        key="dl_wings",
-                    )
-
-            with col3:
-                if not df_vendors.empty:
-                    csv_vendors = df_vendors.to_csv(index=False)
-                    st.download_button(
-                        "💼 Vendor Data (CSV)",
-                        csv_vendors,
-                        f"vendor_data_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        key="dl_vendors",
-                    )
 
     if df_monthly_all.empty and not petty_by_fy:
         st.error("❌ Unable to load data from repository")
