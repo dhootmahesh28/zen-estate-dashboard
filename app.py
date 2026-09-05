@@ -172,6 +172,8 @@ def _parse_petty_month_sheet(df):
     opening = 0.0
     total_credit = 0.0
     total_debit = 0.0
+    excel_total_dr = None
+    excel_closing = None
     rows = []
     sr = 0
 
@@ -209,10 +211,16 @@ def _parse_petty_month_sheet(df):
             continue
 
         if "Closing Balance" in particulars:
+            excel_closing = credit if credit != 0 else debit
             break
-        if not particulars and not whom and credit and debit:
-            break
+
         if particulars == "Total" or whom == "Total":
+            excel_total_dr = debit
+            break
+
+        # Summary row without a "Total" label (some sheets use a blank particulars cell)
+        if not particulars and not whom and credit and debit:
+            excel_total_dr = debit
             break
 
         if not particulars and not whom and credit == 0 and debit == 0:
@@ -231,12 +239,15 @@ def _parse_petty_month_sheet(df):
             debit if debit else "",
         ])
 
-    closing = opening + total_credit - total_debit
+    tc = total_credit
+    td = excel_total_dr if excel_total_dr is not None else total_debit
+    cb = excel_closing if excel_closing is not None else (opening + tc - td)
+
     return {
         "ob": opening,
-        "tc": total_credit,
-        "td": total_debit,
-        "cb": closing,
+        "tc": tc,
+        "td": td,
+        "cb": cb,
         "rows": rows,
     }
 
