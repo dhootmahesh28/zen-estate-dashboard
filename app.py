@@ -2,6 +2,108 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+import re
+
+# ── Financial year helpers (Sep → Aug) ──────────────────────────────────────
+FY_MONTH_ORDER = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
+DEFAULT_MAIN_FY_START = 2025
+
+MONTH_NUM_TO_ABBR = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+}
+
+MONTH_NAME_MAP = {
+    'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+    'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+    'august': 8, 'aug': 8, 'september': 9, 'sept': 9, 'sep': 9,
+    'october': 10, 'oct': 10, 'november': 11, 'nov': 11, 'december': 12, 'dec': 12,
+}
+
+
+def fy_label(fy_start):
+    return f"Sep {fy_start} – Aug {fy_start + 1}"
+
+
+def month_calendar_year(month_abbr, fy_start):
+    return fy_start if month_abbr in ('Sep', 'Oct', 'Nov', 'Dec') else fy_start + 1
+
+
+def get_fy_start(month_num, year):
+    return year if month_num >= 9 else year - 1
+
+
+def month_label(month_abbr, year):
+    return f"{month_abbr} {year}"
+
+
+def parse_petty_sheet_name(sheet_name):
+    """Return (month_abbr, year, month_label) or None if not a monthly petty cash sheet."""
+    raw = sheet_name.strip()
+    normalized = re.sub(r'[.\-_]+', ' ', raw.lower()).strip()
+    normalized = re.sub(r'\s+', ' ', normalized)
+
+    match = re.match(
+        r'^(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|'
+        r'august|aug|september|sept|sep|october|oct|november|nov|december|dec)\s*'
+        r'(20\d{2}|\d{2})?$',
+        normalized,
+    )
+    if not match:
+        return None
+
+    month_num = MONTH_NAME_MAP[match.group(1)]
+    year_token = match.group(2)
+    if year_token:
+        year = int(year_token) if len(year_token) == 4 else 2000 + int(year_token)
+    else:
+        return None
+
+    month_abbr = MONTH_NUM_TO_ABBR[month_num]
+    return month_abbr, year, month_label(month_abbr, year)
+
+
+def sort_month_labels(labels):
+    abbr_to_num = {v: k for k, v in MONTH_NUM_TO_ABBR.items()}
+
+    def sort_key(label):
+        parts = label.split()
+        abbr = parts[0]
+        year = int(parts[1])
+        month_num = abbr_to_num.get(abbr, 99)
+        month_idx = FY_MONTH_ORDER.index(abbr) if abbr in FY_MONTH_ORDER else 99
+        return (get_fy_start(month_num, year), month_idx)
+
+    return sorted(labels, key=sort_key)
+
+
+def filter_df_by_fy(df, fy_start):
+    if df is None or df.empty:
+        return df.copy() if df is not None else pd.DataFrame()
+    if 'FY_Start' in df.columns:
+        return df[df['FY_Start'] == fy_start].copy()
+    return df.copy()
+
+
+def filter_petty_by_fy(all_petty, fy_start):
+    petty = all_petty.get(fy_start, {})
+    if not petty:
+        return {}
+    labels = sort_month_labels(list(petty.keys()))
+    return {label: petty[label] for label in labels}
+
+
+def get_available_financial_years(petty_by_fy, df_monthly):
+    fys = set(petty_by_fy.keys())
+    if df_monthly is not None and not df_monthly.empty and 'FY_Start' in df_monthly.columns:
+        fys.update(df_monthly['FY_Start'].dropna().astype(int).tolist())
+    if not fys:
+        fys.add(DEFAULT_MAIN_FY_START)
+    # Show recent financial years only (Sep 2025 onwards)
+    fys = {fy for fy in fys if fy >= DEFAULT_MAIN_FY_START}
+    if not fys:
+        fys.add(DEFAULT_MAIN_FY_START)
+    return sorted(fys, reverse=True)
 
 st.set_page_config(
     page_title="Zen Estate Financial Dashboard",
@@ -93,6 +195,28 @@ st.markdown("""
         color: #78350F !important;
     }
 
+    /* ── Financial year selector highlight ── */
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) {
+        background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 50%, #93C5FD 100%) !important;
+        border: 3px solid #2563EB !important;
+        border-radius: 14px !important;
+        padding: 18px 22px 14px 22px !important;
+        margin: 0 0 1.2rem 0 !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3) !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) [data-testid="stSelectbox"] label p {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #1E3A8A !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div {
+        background: #FFFFFF !important;
+        border: 2px solid #1D4ED8 !important;
+        border-radius: 10px !important;
+        min-height: 50px !important;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 3px rgba(59, 130, 246, 0.35) !important;
+    }
+
     /* ── Dataframe headers — ALL tables ── */
     div[data-testid="stDataFrame"] table th,
     .dataframe th,
@@ -137,24 +261,17 @@ def load_excel_from_github():
         st.info("Please make sure the Excel file is uploaded to your GitHub repository.")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-PETTY_CASH_SHEETS = [
-    ("September 2025", "Sep 2025"),
-    ("October 2025", "Oct 2025"),
-    ("November 2025", "Nov 2025"),
-    ("December 2025", "Dec 2025"),
-    ("January 2026", "Jan 2026"),
-    ("Feb.2026", "Feb 2026"),
-    ("March 2026", "Mar 2026"),
-    ("April 2026", "Apr 2026"),
-    ("May 2026", "May 2026"),
-    ("June 2026", "Jun 2026"),
-    ("July 2026", "Jul 2026"),
-]
-
 PETTY_CASH_URL = (
     "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/"
     "Petty_Cash_Expense_Details.xlsx"
 )
+
+# Sheets that are not monthly petty cash ledgers
+PETTY_SKIP_SHEETS = {
+    'summary sheet', 'sheet14', 'h wing', 'e wing electrical work',
+    '15th aug-23', '22th jan-24', '26th jan-24', 'holi event 26th mar-24',
+    '15 aug-24', '15th-08-2024',
+}
 
 
 def _format_petty_date(val):
@@ -254,7 +371,7 @@ def _parse_petty_month_sheet(df):
 
 @st.cache_data(show_spinner=False, ttl=300)
 def load_petty_cash_data():
-    """Load petty cash monthly data from the Petty Cash Excel workbook."""
+    """Load all petty cash monthly sheets, grouped by financial year."""
     try:
         import io
         import requests
@@ -267,14 +384,25 @@ def load_petty_cash_data():
         response.raise_for_status()
         xl = pd.ExcelFile(io.BytesIO(response.content))
 
-        petty_data = {}
-        for sheet_name, label in PETTY_CASH_SHEETS:
-            if sheet_name not in xl.sheet_names:
+        petty_by_fy = {}
+        for sheet_name in xl.sheet_names:
+            if sheet_name.strip().lower() in PETTY_SKIP_SHEETS:
                 continue
-            df = xl.parse(sheet_name, header=None)
-            petty_data[label] = _parse_petty_month_sheet(df)
+            parsed = parse_petty_sheet_name(sheet_name)
+            if not parsed:
+                continue
+            month_abbr, year, label = parsed
+            abbr_to_num = {v: k for k, v in MONTH_NUM_TO_ABBR.items()}
+            fy_start = get_fy_start(abbr_to_num[month_abbr], year)
 
-        return petty_data
+            df = xl.parse(sheet_name, header=None)
+            parsed_sheet = _parse_petty_month_sheet(df)
+            if not parsed_sheet.get('rows') and parsed_sheet.get('ob') == 0:
+                continue
+
+            petty_by_fy.setdefault(fy_start, {})[label] = parsed_sheet
+
+        return petty_by_fy
     except Exception:
         return {}
 
@@ -335,6 +463,8 @@ def load_excel_data(file):
         
         for month_info in months_info:
             month = month_info['name']
+            fy_start = DEFAULT_MAIN_FY_START
+            cal_year = month_calendar_year(month, fy_start)
             
             # Get summary totals
             to_be = df.iloc[month_info['summary_row'], 6] if pd.notna(df.iloc[month_info['summary_row'], 6]) else 0
@@ -354,6 +484,8 @@ def load_excel_data(file):
             
             monthly_data.append({
                 'Month': month,
+                'Year': cal_year,
+                'FY_Start': fy_start,
                 'To_Be': float(to_be),
                 'Received': float(received),
                 'Expense': float(expense),
@@ -370,6 +502,8 @@ def load_excel_data(file):
                     
                     wing_data.append({
                         'Month': month,
+                        'Year': cal_year,
+                        'FY_Start': fy_start,
                         'Wing': wing,
                         'To_Be': float(to_be_val) if pd.notna(to_be_val) else 0,
                         'Received': float(received_val) if pd.notna(received_val) else 0,
@@ -403,7 +537,8 @@ def load_excel_data(file):
                         vendor_data.append({
                             'Vendor': vendor_str,
                             'Amount': float(amount),
-                            'Month': section['month']
+                            'Month': section['month'],
+                            'FY_Start': DEFAULT_MAIN_FY_START,
                         })
         
         df_monthly = pd.DataFrame(monthly_data)
@@ -440,6 +575,7 @@ def load_excel_data(file):
                 
                 extra_income_breakdown.append({
                     'Month': month,
+                    'FY_Start': DEFAULT_MAIN_FY_START,
                     'NBH': float(nbh) if isinstance(nbh, (int, float)) else 0,
                     'Lift': float(lift) if isinstance(lift, (int, float)) else 0,
                     'Event': float(event) if isinstance(event, (int, float)) else 0,
@@ -496,7 +632,10 @@ def load_excel_data(file):
                     if amount != 0:
                         key = (month, wing)
                         if key not in fine_data:
-                            fine_data[key] = {'Month': month, 'Wing': wing, 'HK': 0, 'Quinteze': 0, 'Security': 0, 'STP': 0}
+                            fine_data[key] = {
+                                'Month': month, 'Wing': wing, 'FY_Start': DEFAULT_MAIN_FY_START,
+                                'HK': 0, 'Quinteze': 0, 'Security': 0, 'STP': 0,
+                            }
                         fine_data[key][vendor] += amount
         
         # Convert to dataframe
@@ -850,24 +989,26 @@ def render_leela_fund(df_leela):
         st.warning(f"Leela Fund data not available: {e}")
 
 
-def render_petty_cash(petty_data):
-    """Render Petty Cash monthly details loaded from the Petty Cash Excel workbook."""
+def render_petty_cash(petty_data, fy_start):
+    """Render Petty Cash monthly details for the selected financial year."""
+    fy_text = fy_label(fy_start)
     if not petty_data:
-        st.warning("Petty Cash data not available.")
+        st.info(f"No petty cash data available for **{fy_text}**.")
         return
 
     month_keys = list(petty_data.keys())
     first_month = month_keys[0]
-    calc_last_month = month_keys[-1]  # Jul 2026 — Aug 2026 excluded (no data in file)
+    calc_last_month = month_keys[-1]
     ob_sep = petty_data[first_month]["ob"]
     total_cr = sum(m["tc"] for m in petty_data.values())
     total_db = sum(m["td"] for m in petty_data.values())
     overall_cb = petty_data[calc_last_month]["cb"]
+    month_range = f"{first_month.split()[0]} – {calc_last_month.split()[0]}"
 
     st.markdown(
         "<div class='sec-header' "
-        "style='background:linear-gradient(90deg,#312E81,#6366F1);margin-top:1.5rem;'>"
-        "💵 Petty Cash - Monthly Expense Details (Sep 2025 - Aug 2026)</div>",
+        "style='background:linear-gradient(90deg,#312E81,#6366F1);margin-top:0.5rem;'>"
+        f"💵 Petty Cash - Monthly Expense Details ({fy_text})</div>",
         unsafe_allow_html=True,
     )
 
@@ -879,12 +1020,12 @@ def render_petty_cash(petty_data):
         <div class='metric-sub'>Carried forward from previous period</div>
       </div>
       <div class='metric-card mc-green'>
-        <div class='metric-label'>Total Credited (Sep - Jul)</div>
+        <div class='metric-label'>Total Credited ({month_range})</div>
         <div class='metric-value'>₹{total_cr:,.0f}</div>
         <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card mc-red'>
-        <div class='metric-label'>Total Debited (Sep - Jul)</div>
+        <div class='metric-label'>Total Debited ({month_range})</div>
         <div class='metric-value'>₹{total_db:,.0f}</div>
         <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
@@ -903,7 +1044,7 @@ def render_petty_cash(petty_data):
             "👇 Choose a month below to view petty cash transactions</p>",
             unsafe_allow_html=True,
         )
-        selected_m = st.selectbox("📅 Select Month:", month_keys, key="petty_month_sel")
+        selected_m = st.selectbox("📅 Select Month:", month_keys, key=f"petty_month_sel_{fy_start}")
     md = petty_data[selected_m]
 
     c1, c2, c3, c4 = st.columns(4)
@@ -993,15 +1134,48 @@ def render_petty_cash(petty_data):
 
 
 def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard (Sep 2025 – Aug 2026)</h1>', unsafe_allow_html=True)
-    
-    # Auto-load data from GitHub (no upload needed)
+    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard</h1>', unsafe_allow_html=True)
+
     with st.spinner('Loading latest data from repository...'):
-        df_monthly, df_wings, df_vendors, df_extra_income_breakdown, df_fines = load_excel_from_github()
-        petty_data = load_petty_cash_data()
+        df_monthly_all, df_wings_all, df_vendors_all, df_extra_all, df_fines_all = load_excel_from_github()
+        petty_by_fy = load_petty_cash_data()
         df_leela = load_leela_data()
-    
-    if not df_monthly.empty:
+
+    available_fys = get_available_financial_years(petty_by_fy, df_monthly_all)
+    fy_options = {fy_label(fy): fy for fy in available_fys}
+
+    with st.container(border=True):
+        st.markdown('<span id="fy-picker-marker"></span>', unsafe_allow_html=True)
+        st.markdown(
+            "<p style='margin:0 0 12px 0;color:#1E3A8A;font-weight:700;font-size:0.95rem;'>"
+            "📅 Select Financial Year to view dashboard data</p>",
+            unsafe_allow_html=True,
+        )
+        selected_fy_label = st.selectbox("Financial Year:", list(fy_options.keys()), key="fy_selector")
+
+    selected_fy = fy_options[selected_fy_label]
+    st.caption(f"Showing data for **{selected_fy_label}**")
+
+    df_monthly = filter_df_by_fy(df_monthly_all, selected_fy)
+    df_wings = filter_df_by_fy(df_wings_all, selected_fy)
+    df_vendors = filter_df_by_fy(df_vendors_all, selected_fy)
+    df_extra_income_breakdown = filter_df_by_fy(df_extra_all, selected_fy)
+    df_fines = filter_df_by_fy(df_fines_all, selected_fy)
+    petty_data = filter_petty_by_fy(petty_by_fy, selected_fy)
+
+    tab_overview, tab_leela, tab_petty, tab_extra, tab_wings, tab_downloads = st.tabs([
+        "📊 Overview",
+        "🏦 Leela Fund",
+        "💵 Petty Cash",
+        "💰 Extra Income",
+        "🏢 Wings & Shops",
+        "📥 Downloads",
+    ])
+
+    with tab_overview:
+        if df_monthly.empty:
+            st.info(f"No main collection/expense data available for **{selected_fy_label}**.")
+        else:
             # Portfolio metric cards
             st.markdown("<div class='sec-header sec-blue'>📊 Portfolio Overview</div>", unsafe_allow_html=True)
             total_to_be   = df_monthly['To_Be'].sum()
@@ -1014,7 +1188,7 @@ def main():
                   <div class='metric-card mc-blue'>
                     <div class='metric-label'>Total to be received</div>
                     <div class='metric-value'>₹{total_to_be/10000000:.2f} Cr</div>
-                    <div class='metric-sub'>Sep 2025 – Jul 2026</div>
+                    <div class='metric-sub'>{selected_fy_label}</div>
                   </div>
                   <div class='metric-card mc-green'>
                     <div class='metric-label'>Total received</div>
@@ -1114,23 +1288,24 @@ def main():
               <tbody>{rows_html}</tbody>
             </table>
             </div>""", unsafe_allow_html=True)
-            
-            st.markdown("---")
 
-            # Leela Fund Details (right after Monthly Overview)
-            render_leela_fund(df_leela)
+    with tab_leela:
+        render_leela_fund(df_leela)
 
-            # Petty Cash Details (loaded from Petty Cash Excel workbook)
-            if st.button(
-                "🔄 Refresh petty cash data",
-                key="refresh_petty_btn",
-                help="Click after uploading an updated Petty Cash Excel file to GitHub",
-            ):
-                load_petty_cash_data.clear()
-                st.rerun()
-            render_petty_cash(petty_data)
+    with tab_petty:
+        if st.button(
+            "🔄 Refresh petty cash data",
+            key="refresh_petty_btn",
+            help="Click after uploading an updated Petty Cash Excel file to GitHub",
+        ):
+            load_petty_cash_data.clear()
+            st.rerun()
+        render_petty_cash(petty_data, selected_fy)
 
-            # Vendor Breakdown - 5 separate charts for each month
+    with tab_extra:
+        if df_monthly.empty:
+            st.info(f"No extra income data for **{selected_fy_label}**.")
+        else:
             # Extra Income
             st.markdown("""
                 <div class='sec-header sec-purple'>💰 Extra Income — Month-wise</div>
@@ -1157,228 +1332,198 @@ def main():
                          'Parking_Fine':'₹{:,.2f}','ClubHouse_Booking & Gym':'₹{:,.2f}','Total':'₹{:,.2f}'}
                 )
             
+    with tab_wings:
+        if df_wings.empty:
+            st.info(f"No wing/shop data for **{selected_fy_label}**.")
+        else:
             # Wing/Shop Filter Section
             st.markdown("<div class='sec-header sec-orange'>🏢 Wing / Shop-Wise Analysis</div>", unsafe_allow_html=True)
-            
-            if not df_wings.empty:
-                # Get unique wings and shops - sorted
-                all_wings_shops = sorted(df_wings['Wing'].unique())
-                
-                if all_wings_shops:
-                    # Create columns for better layout
-                    col1, col2 = st.columns([1, 3])
-                    
-                    with col1:
-                        selected_wing_shop = st.selectbox('Select a Wing/Shop:', all_wings_shops, key='wing_shop_filter')
-                    
-                    with col2:
-                        st.write("")  # Spacing
-                    
-                    # Filter data for selected wing/shop
-                    wing_shop_data = df_wings[df_wings['Wing'] == selected_wing_shop].copy()
-                    
-                    if not wing_shop_data.empty:
-                        # Calculate totals
-                        total_to_be = wing_shop_data['To_Be'].sum()
-                        total_received = wing_shop_data['Received'].sum()
-                        total_difference = wing_shop_data['Difference'].sum()
-                        
-                        # Get fine data for selected wing/shop
-                        wing_shop_fines = pd.DataFrame()
-                        total_fines = 0
-                        if not df_fines.empty:
-                            wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy()
-                            if not wing_shop_fines.empty:
-                                total_fines = wing_shop_fines['Total_Fine'].sum()
-                        
-                        # Display metrics
-                        st.subheader(f"📊 {selected_wing_shop} - Summary")
-                        
-                        metric_cols = st.columns(4)
-                        
-                        with metric_cols[0]:
-                            st.metric("Total To Be Received", f"₹{total_to_be:,.2f}")
-                        
-                        with metric_cols[1]:
-                            st.metric("Total Received", f"₹{total_received:,.2f}")
-                        
-                        with metric_cols[2]:
-                            st.metric("Total Fines Deducted", f"₹{total_fines:,.2f}")
-                        
-                        # Calculate adjusted difference (pending - fines)
-                        adjusted_difference = total_difference - total_fines
-                        
-                        with metric_cols[3]:
-                            # Color code based on pending/excess (after deducting fines)
-                            if adjusted_difference > 0:
-                                st.metric("Total Pending", f"₹{adjusted_difference:,.2f}", delta=None, 
-                                         help="Amount still to be received after fines")
-                            else:
-                                st.metric("Total Excess", f"₹{abs(adjusted_difference):,.2f}", delta=None,
-                                         help="Amount received extra after fines")
-                        
-                        # Display detailed breakdown
-                        st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
-                        
-                        wing_shop_display = wing_shop_data.copy()
-                        # Drop Wing column - not needed in per-wing breakdown table
-                        if 'Wing' in wing_shop_display.columns:
-                            wing_shop_display = wing_shop_display.drop('Wing', axis=1)
-                        # Sort by month chronologically (Sep, Oct, Nov, Dec, Jan)
-                        month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
-                        wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
-                        wing_shop_display = wing_shop_display.sort_values('month_sort')
-                        wing_shop_display = wing_shop_display.drop('month_sort', axis=1)
-                        
-                        wing_shop_display = wing_shop_display.rename(columns={
-                            'To_Be': 'To Be Received',
-                            'Received': 'Actual Received',
-                            'Difference': 'Pending/Excess (-ve = Excess)'
-                        })
-                        
-                        # Add Fine_Details column (only if this is a Wing with fine data)
-                        wing_shop_display['Fine_Details'] = '-'
-                        wing_shop_display['Fine_Amount'] = 0.0
-                        
-                        if not wing_shop_fines.empty:
-                            for idx, row in wing_shop_display.iterrows():
-                                month = row['Month']
-                                fine_month_data = wing_shop_fines[wing_shop_fines['Month'] == month]
-                                if not fine_month_data.empty:
-                                    fine_row = fine_month_data.iloc[0]
-                                    hk = float(fine_row['HK']) if pd.notna(fine_row['HK']) else 0
-                                    quinteze = float(fine_row['Quinteze']) if pd.notna(fine_row['Quinteze']) else 0
-                                    security = float(fine_row['Security']) if pd.notna(fine_row['Security']) else 0
-                                    stp = float(fine_row['STP']) if pd.notna(fine_row['STP']) else 0
-                                    
-                                    total_month_fine = hk + quinteze + security + stp
-                                    
-                                    fine_details_list = []
-                                    if hk > 0:
-                                        fine_details_list.append(f"HK: ₹{hk:,.0f}")
-                                    if quinteze > 0:
-                                        fine_details_list.append(f"Q: ₹{quinteze:,.0f}")
-                                    if security > 0:
-                                        fine_details_list.append(f"Sec: ₹{security:,.0f}")
-                                    if stp > 0:
-                                        fine_details_list.append(f"STP: ₹{stp:,.0f}")
-                                    if fine_details_list:
-                                        wing_shop_display.at[idx, 'Fine_Details'] = ' | '.join(fine_details_list)
-                                        wing_shop_display.at[idx, 'Fine_Amount'] = total_month_fine
-                        
-                        # Calculate adjusted pending/excess after deducting fines
-                        wing_shop_display['Pending/Excess (-ve = Excess)'] = wing_shop_display['Pending/Excess (-ve = Excess)'] - wing_shop_display['Fine_Amount']
-                        
-                        render_html_table(
-                            wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']],
-                            fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Pending/Excess (-ve = Excess)':'₹{:,.2f}'}
-                        )
-                    else:
-                        st.warning(f"No data available for {selected_wing_shop}")
-            
-            # Detailed Wing/Shop Monthly Breakdown Table
-            st.markdown("<div class='sec-header sec-teal'>📋 Wing / Shop Monthly Details — All</div>", unsafe_allow_html=True)
-            if not df_wings.empty:
-                st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop** *(Sorted by Month)*")
-                
-                # Format the dataframe for better display
-                detailed_breakdown = df_wings.copy()
-                
-                # Remove C Shop Rahul and C Shop Sagar (no data)
-                detailed_breakdown = detailed_breakdown[~detailed_breakdown['Wing'].isin(['C Shop Rahul', 'C Shop Sagar'])]
-                
-                # Merge fine data into detailed breakdown
-                if not df_fines.empty:
-                    # Build a fine summary per (Wing, Month)
-                    fine_summary = df_fines[['Month', 'Wing', 'HK', 'Quinteze', 'Security', 'STP', 'Total_Fine']].copy()
-                    
-                    def format_fine_detail(row):
-                        parts = []
-                        if row['HK'] > 0:       parts.append(f"HK:₹{row['HK']:,.0f}")
-                        if row['Quinteze'] > 0:  parts.append(f"Q:₹{row['Quinteze']:,.0f}")
-                        if row['Security'] > 0:  parts.append(f"Sec:₹{row['Security']:,.0f}")
-                        if row['STP'] > 0:       parts.append(f"STP:₹{row['STP']:,.0f}")
-                        return ' | '.join(parts) if parts else '-'
-                    
-                    fine_summary['Fine_Details'] = fine_summary.apply(format_fine_detail, axis=1)
-                    fine_summary['Fine_Amount']  = fine_summary['Total_Fine']
-                    detailed_breakdown = detailed_breakdown.merge(
-                        fine_summary[['Month', 'Wing', 'Fine_Details', 'Fine_Amount']],
-                        on=['Month', 'Wing'], how='left'
-                    )
-                    detailed_breakdown['Fine_Details'] = detailed_breakdown['Fine_Details'].fillna('-')
-                    detailed_breakdown['Fine_Amount']  = detailed_breakdown['Fine_Amount'].fillna(0)
-                else:
-                    detailed_breakdown['Fine_Details'] = '-'
-                    detailed_breakdown['Fine_Amount']  = 0
-                
-                # Create a custom sort order for months
-                month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6, 'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
-                detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
-                
-                # Sort by Month FIRST (chronologically), then Wing (alphabetically)
-                # This groups all Wings/Shops for each month together
-                detailed_breakdown = detailed_breakdown.sort_values(['Month_Sort', 'Wing'])
-                
-                # Remove the helper column
-                detailed_breakdown = detailed_breakdown.drop('Month_Sort', axis=1)
-                
-                # Reset index to show sequential numbering starting from 0
-                detailed_breakdown = detailed_breakdown.reset_index(drop=True)
-                
-                # Rename columns for clarity
-                detailed_breakdown = detailed_breakdown.rename(columns={
-                    'To_Be': 'To Be Received',
-                    'Received': 'Actual Received'
-                })
-                
-                render_html_table(
-                    detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']],
-                    fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Difference':'₹{:,.2f}'}
-                )
-            
-            # Download Reports
-            st.markdown("---")
+            all_wings_shops = sorted(df_wings['Wing'].unique())
 
-            st.markdown("### 📥 Download Reports")
+            if all_wings_shops:
+                col1, col2 = st.columns([1, 3])
+
+                with col1:
+                    selected_wing_shop = st.selectbox(
+                        'Select a Wing/Shop:', all_wings_shops, key=f'wing_shop_filter_{selected_fy}'
+                    )
+
+                with col2:
+                    st.write("")
+
+                wing_shop_data = df_wings[df_wings['Wing'] == selected_wing_shop].copy()
+
+                if not wing_shop_data.empty:
+                    total_to_be = wing_shop_data['To_Be'].sum()
+                    total_received = wing_shop_data['Received'].sum()
+                    total_difference = wing_shop_data['Difference'].sum()
+
+                    wing_shop_fines = pd.DataFrame()
+                    total_fines = 0
+                    if not df_fines.empty:
+                        wing_shop_fines = df_fines[df_fines['Wing'] == selected_wing_shop].copy()
+                        if not wing_shop_fines.empty:
+                            total_fines = wing_shop_fines['Total_Fine'].sum()
+
+                    st.subheader(f"📊 {selected_wing_shop} - Summary")
+                    metric_cols = st.columns(4)
+
+                    with metric_cols[0]:
+                        st.metric("Total To Be Received", f"₹{total_to_be:,.2f}")
+                    with metric_cols[1]:
+                        st.metric("Total Received", f"₹{total_received:,.2f}")
+                    with metric_cols[2]:
+                        st.metric("Total Fines Deducted", f"₹{total_fines:,.2f}")
+
+                    adjusted_difference = total_difference - total_fines
+                    with metric_cols[3]:
+                        if adjusted_difference > 0:
+                            st.metric("Total Pending", f"₹{adjusted_difference:,.2f}", delta=None,
+                                     help="Amount still to be received after fines")
+                        else:
+                            st.metric("Total Excess", f"₹{abs(adjusted_difference):,.2f}", delta=None,
+                                     help="Amount received extra after fines")
+
+                    st.subheader(f"📋 {selected_wing_shop} - Monthly Breakdown")
+                    wing_shop_display = wing_shop_data.copy()
+                    if 'Wing' in wing_shop_display.columns:
+                        wing_shop_display = wing_shop_display.drop('Wing', axis=1)
+                    month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6,
+                                   'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
+                    wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
+                    wing_shop_display = wing_shop_display.sort_values('month_sort').drop('month_sort', axis=1)
+                    wing_shop_display = wing_shop_display.rename(columns={
+                        'To_Be': 'To Be Received',
+                        'Received': 'Actual Received',
+                        'Difference': 'Pending/Excess (-ve = Excess)'
+                    })
+
+                    wing_shop_display['Fine_Details'] = '-'
+                    wing_shop_display['Fine_Amount'] = 0.0
+
+                    if not wing_shop_fines.empty:
+                        for idx, row in wing_shop_display.iterrows():
+                            month = row['Month']
+                            fine_month_data = wing_shop_fines[wing_shop_fines['Month'] == month]
+                            if not fine_month_data.empty:
+                                fine_row = fine_month_data.iloc[0]
+                                hk = float(fine_row['HK']) if pd.notna(fine_row['HK']) else 0
+                                quinteze = float(fine_row['Quinteze']) if pd.notna(fine_row['Quinteze']) else 0
+                                security = float(fine_row['Security']) if pd.notna(fine_row['Security']) else 0
+                                stp = float(fine_row['STP']) if pd.notna(fine_row['STP']) else 0
+                                total_month_fine = hk + quinteze + security + stp
+                                fine_details_list = []
+                                if hk > 0:
+                                    fine_details_list.append(f"HK: ₹{hk:,.0f}")
+                                if quinteze > 0:
+                                    fine_details_list.append(f"Q: ₹{quinteze:,.0f}")
+                                if security > 0:
+                                    fine_details_list.append(f"Sec: ₹{security:,.0f}")
+                                if stp > 0:
+                                    fine_details_list.append(f"STP: ₹{stp:,.0f}")
+                                if fine_details_list:
+                                    wing_shop_display.at[idx, 'Fine_Details'] = ' | '.join(fine_details_list)
+                                    wing_shop_display.at[idx, 'Fine_Amount'] = total_month_fine
+
+                    wing_shop_display['Pending/Excess (-ve = Excess)'] = (
+                        wing_shop_display['Pending/Excess (-ve = Excess)'] - wing_shop_display['Fine_Amount']
+                    )
+                    render_html_table(
+                        wing_shop_display[['Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Pending/Excess (-ve = Excess)']],
+                        fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Pending/Excess (-ve = Excess)':'₹{:,.2f}'}
+                    )
+                else:
+                    st.warning(f"No data available for {selected_wing_shop}")
+
+            st.markdown("<div class='sec-header sec-teal'>📋 Wing / Shop Monthly Details — All</div>", unsafe_allow_html=True)
+            st.markdown("**Monthly breakdown showing To Be Received, Actual Received, and Difference for each Wing/Shop** *(Sorted by Month)*")
+            detailed_breakdown = df_wings.copy()
+            detailed_breakdown = detailed_breakdown[~detailed_breakdown['Wing'].isin(['C Shop Rahul', 'C Shop Sagar'])]
+
+            if not df_fines.empty:
+                fine_summary = df_fines[['Month', 'Wing', 'HK', 'Quinteze', 'Security', 'STP', 'Total_Fine']].copy()
+
+                def format_fine_detail(row):
+                    parts = []
+                    if row['HK'] > 0:
+                        parts.append(f"HK:₹{row['HK']:,.0f}")
+                    if row['Quinteze'] > 0:
+                        parts.append(f"Q:₹{row['Quinteze']:,.0f}")
+                    if row['Security'] > 0:
+                        parts.append(f"Sec:₹{row['Security']:,.0f}")
+                    if row['STP'] > 0:
+                        parts.append(f"STP:₹{row['STP']:,.0f}")
+                    return ' | '.join(parts) if parts else '-'
+
+                fine_summary['Fine_Details'] = fine_summary.apply(format_fine_detail, axis=1)
+                fine_summary['Fine_Amount'] = fine_summary['Total_Fine']
+                detailed_breakdown = detailed_breakdown.merge(
+                    fine_summary[['Month', 'Wing', 'Fine_Details', 'Fine_Amount']],
+                    on=['Month', 'Wing'], how='left'
+                )
+                detailed_breakdown['Fine_Details'] = detailed_breakdown['Fine_Details'].fillna('-')
+                detailed_breakdown['Fine_Amount'] = detailed_breakdown['Fine_Amount'].fillna(0)
+            else:
+                detailed_breakdown['Fine_Details'] = '-'
+                detailed_breakdown['Fine_Amount'] = 0
+
+            month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6,
+                           'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
+            detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
+            detailed_breakdown = detailed_breakdown.sort_values(['Month_Sort', 'Wing']).drop('Month_Sort', axis=1)
+            detailed_breakdown = detailed_breakdown.reset_index(drop=True)
+            detailed_breakdown = detailed_breakdown.rename(columns={
+                'To_Be': 'To Be Received',
+                'Received': 'Actual Received'
+            })
+            render_html_table(
+                detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']],
+                fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Difference':'₹{:,.2f}'}
+            )
             
+    with tab_downloads:
+        st.markdown("### 📥 Download Reports")
+        if df_monthly.empty and df_wings.empty:
+            st.info(f"No CSV reports available for **{selected_fy_label}**.")
+        else:
             col1, col2, col3 = st.columns(3)
-            
+
             with col1:
-                csv_monthly = df_monthly.to_csv(index=False)
-                st.download_button(
-                    "📊 Monthly Summary (CSV)",
-                    csv_monthly,
-                    f"monthly_summary_{datetime.now().strftime('%Y%m%d')}.csv",
-                    "text/csv"
-                )
-            
+                if not df_monthly.empty:
+                    csv_monthly = df_monthly.to_csv(index=False)
+                    st.download_button(
+                        "📊 Monthly Summary (CSV)",
+                        csv_monthly,
+                        f"monthly_summary_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
+                        "text/csv",
+                        key="dl_monthly",
+                    )
+
             with col2:
-                csv_wings = df_wings.to_csv(index=False)
-                st.download_button(
-                    "🏘️ Wing Data (CSV)",
-                    csv_wings,
-                    f"wing_data_{datetime.now().strftime('%Y%m%d')}.csv",
-                    "text/csv"
-                )
-            
+                if not df_wings.empty:
+                    csv_wings = df_wings.to_csv(index=False)
+                    st.download_button(
+                        "🏘️ Wing Data (CSV)",
+                        csv_wings,
+                        f"wing_data_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
+                        "text/csv",
+                        key="dl_wings",
+                    )
+
             with col3:
                 if not df_vendors.empty:
                     csv_vendors = df_vendors.to_csv(index=False)
                     st.download_button(
                         "💼 Vendor Data (CSV)",
                         csv_vendors,
-                        f"vendor_data_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv"
+                        f"vendor_data_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
+                        "text/csv",
+                        key="dl_vendors",
                     )
 
-    else:
-        st.warning("⚠️ No data found")
-    
-    # Error handling if data couldn't be loaded
-    if df_monthly.empty:
+    if df_monthly_all.empty and not petty_by_fy:
         st.error("❌ Unable to load data from repository")
-        st.info("Please ensure the Excel file is committed to the GitHub repository.")
+        st.info("Please ensure the Excel files are committed to the GitHub repository.")
 
 if __name__ == "__main__":
     main()
