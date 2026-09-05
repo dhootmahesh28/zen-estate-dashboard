@@ -252,14 +252,18 @@ def _parse_petty_month_sheet(df):
     }
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=300)
 def load_petty_cash_data():
     """Load petty cash monthly data from the Petty Cash Excel workbook."""
     try:
         import io
         import requests
 
-        response = requests.get(PETTY_CASH_URL, timeout=30)
+        response = requests.get(
+            PETTY_CASH_URL,
+            timeout=30,
+            headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+        )
         response.raise_for_status()
         xl = pd.ExcelFile(io.BytesIO(response.content))
 
@@ -1117,6 +1121,13 @@ def main():
             render_leela_fund(df_leela)
 
             # Petty Cash Details (loaded from Petty Cash Excel workbook)
+            if st.button(
+                "🔄 Refresh petty cash data",
+                key="refresh_petty_btn",
+                help="Click after uploading an updated Petty Cash Excel file to GitHub",
+            ):
+                load_petty_cash_data.clear()
+                st.rerun()
             render_petty_cash(petty_data)
 
             # Vendor Breakdown - 5 separate charts for each month
