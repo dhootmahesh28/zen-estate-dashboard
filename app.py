@@ -531,14 +531,18 @@ def _parse_petty_month_sheet(df):
 
 
 @st.cache_data(show_spinner=False, ttl=300)
-def load_petty_cash_data():
+def load_petty_cash_data(cache_bust=0):
     """Load petty cash monthly sheets (Sep 2025 – Jul 2026), grouped by financial year."""
     try:
         import io
         import requests
 
+        url = PETTY_CASH_URL
+        if cache_bust:
+            url = f"{PETTY_CASH_URL}?v={cache_bust}"
+
         response = requests.get(
-            PETTY_CASH_URL,
+            url,
             timeout=30,
             headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
         )
@@ -1293,9 +1297,12 @@ def render_petty_cash(petty_data, fy_start):
 def main():
     st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard</h1>', unsafe_allow_html=True)
 
+    if "petty_cache_bust" not in st.session_state:
+        st.session_state.petty_cache_bust = 0
+
     with st.spinner('Loading latest data from repository...'):
         df_monthly_all, df_wings_all, df_vendors_all, df_extra_all, df_fines_all = load_excel_from_github()
-        petty_by_fy = load_petty_cash_data()
+        petty_by_fy = load_petty_cash_data(st.session_state.petty_cache_bust)
         df_leela = load_leela_data()
 
     available_fys = get_available_financial_years(petty_by_fy, df_monthly_all)
@@ -1463,13 +1470,22 @@ def main():
         render_leela_fund(df_leela)
 
     with tab_petty:
-        if st.button(
-            "🔄 Refresh petty cash data",
-            key="refresh_petty_btn",
-            help="Click after uploading an updated Petty Cash Excel file to GitHub",
-        ):
-            load_petty_cash_data.clear()
-            st.rerun()
+        refresh_col, info_col = st.columns([1, 3])
+        with refresh_col:
+            if st.button(
+                "🔄 Refresh petty cash data",
+                key="refresh_petty_btn",
+                help="Use after uploading an updated Petty_Cash_Expense_Details.xlsx to GitHub",
+            ):
+                load_petty_cash_data.clear()
+                st.session_state.petty_cache_bust += 1
+                st.rerun()
+        with info_col:
+            st.caption(
+                "Petty cash loads from GitHub (`Petty_Cash_Expense_Details.xlsx`). "
+                "After updating the file on GitHub, click **Refresh** here — "
+                "the dashboard does not auto-detect Excel changes."
+            )
         render_petty_cash(petty_data, selected_fy)
 
     with tab_extra:
