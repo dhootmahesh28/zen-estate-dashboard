@@ -174,20 +174,44 @@ st.markdown("""
     footer { visibility: hidden; }
 
     /* ── Main title ── */
-    .main-header {
-        font-size: 2.35rem;
-        font-weight: 800;
-        color: #ffffff;
-        text-align: center;
+    .main-header-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
         padding: 1.35rem 1.5rem;
         border-radius: 18px;
         background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%);
         margin-bottom: 1.25rem;
-        letter-spacing: 0.03em;
-        text-shadow: 0 3px 12px rgba(0,0,0,0.45);
         border: 2px solid rgba(255,255,255,0.15);
         box-shadow: 0 10px 30px rgba(30, 58, 138, 0.35);
+    }
+    .main-header {
+        font-size: 2.35rem;
+        font-weight: 800;
+        color: #ffffff;
+        text-align: left;
+        margin: 0;
+        padding: 0;
+        letter-spacing: 0.03em;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.45);
         -webkit-text-fill-color: #ffffff;
+        background: none;
+        border: none;
+        box-shadow: none;
+    }
+    .main-header-fy {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #ffffff;
+        background: rgba(255,255,255,0.16);
+        padding: 10px 20px;
+        border-radius: 999px;
+        border: 2px solid rgba(255,255,255,0.28);
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.25);
     }
 
     /* ── Financial year control panel banner ── */
@@ -1294,9 +1318,18 @@ def render_petty_cash(petty_data, fy_start):
     )
 
 
-def main():
-    st.markdown('<h1 class="main-header">🏢 Zen Estate Financial Dashboard</h1>', unsafe_allow_html=True)
+def render_dashboard_header(fy_label_text):
+    """Title bar with the active financial year on the right."""
+    st.markdown(
+        f"""<div class="main-header-bar">
+            <h1 class="main-header">🏢 Zen Estate Financial Dashboard</h1>
+            <span class="main-header-fy">({fy_label_text})</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
+
+def main():
     if "petty_cache_bust" not in st.session_state:
         st.session_state.petty_cache_bust = 0
 
@@ -1307,6 +1340,14 @@ def main():
 
     available_fys = get_available_financial_years(petty_by_fy, df_monthly_all)
     fy_options = {fy_label(fy): fy for fy in available_fys}
+    fy_labels = list(fy_options.keys())
+    latest_fy_label = fy_labels[0] if fy_labels else fy_label(DEFAULT_MAIN_FY_START)
+
+    header_fy_label = st.session_state.get("fy_selector", latest_fy_label)
+    if header_fy_label not in fy_options:
+        header_fy_label = latest_fy_label
+
+    render_dashboard_header(header_fy_label)
 
     with st.container(border=True):
         st.markdown('<span id="fy-picker-marker"></span>', unsafe_allow_html=True)
@@ -1319,9 +1360,15 @@ def main():
             "letter-spacing:0.02em;'>Choose the year to view all dashboard sections</p>",
             unsafe_allow_html=True,
         )
+        default_index = (
+            fy_labels.index(st.session_state["fy_selector"])
+            if st.session_state.get("fy_selector") in fy_labels
+            else 0
+        )
         selected_fy_label = st.selectbox(
             "Financial Year:",
-            list(fy_options.keys()),
+            fy_labels,
+            index=default_index,
             key="fy_selector",
             label_visibility="visible",
         )
