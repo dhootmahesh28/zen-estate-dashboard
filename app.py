@@ -2,11 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+from email.message import EmailMessage
 import re
-import requests
-
-RESEND_API_URL = "https://api.resend.com/emails"
-DEFAULT_RESEND_FROM = "Zen Estate <onboarding@resend.dev>"
+import smtplib
 
 # Wing/shop email contacts (from wing_contacts.xlsx)
 WING_CONTACT_EMAILS = {
@@ -150,16 +148,21 @@ def compute_wing_pending_summary(df_wings, df_fines):
     return pending.sort_values('Wing').reset_index(drop=True)
 
 
-def get_resend_config():
-    """Read Resend API settings from Streamlit secrets."""
+def get_smtp_config():
+    """Read Gmail SMTP settings from Streamlit secrets."""
     try:
-        resend_cfg = st.secrets.get('resend')
-        if not resend_cfg or 'api_key' not in resend_cfg:
+        smtp = st.secrets.get('smtp')
+        if not smtp:
+            return None
+        required = ('server', 'port', 'username', 'password')
+        if any(key not in smtp for key in required):
             return None
         return {
-            'api_key': str(resend_cfg['api_key']),
-            'from_email': str(resend_cfg.get('from_email', DEFAULT_RESEND_FROM)),
-            'reply_to': str(resend_cfg.get('reply_to', 'zenestatedashboard@gmail.com')),
+            'server': str(smtp['server']),
+            'port': int(smtp['port']),
+            'username': str(smtp['username']),
+            'password': str(smtp['password']),
+            'from_email': str(smtp.get('from_email', smtp['username'])),
         }
     except Exception:
         return None
@@ -192,37 +195,21 @@ def build_payment_reminder_email(wing, pending_amount, fy_label_text):
     return subject, text, html
 
 
-def send_payment_reminder_email(resend_config, to_email, subject, text_body, html_body):
+def send_payment_reminder_email(smtp_config, to_email, subject, text_body, html_body):
     if not EMAIL_PATTERN.match(to_email):
         raise ValueError(f"Invalid email address: {to_email}")
 
-    payload = {
-        'from': resend_config['from_email'],
-        'to': [to_email],
-        'subject': subject,
-        'text': text_body,
-        'html': html_body,
-        'reply_to': resend_config['reply_to'],
-    }
+    message = EmailMessage()
+    message['Subject'] = subject
+    message['From'] = smtp_config['from_email']
+    message['To'] = to_email
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype='html')
 
-    response = requests.post(
-        RESEND_API_URL,
-        headers={
-            'Authorization': f"Bearer {resend_config['api_key']}",
-            'Content-Type': 'application/json',
-        },
-        json=payload,
-        timeout=30,
-    )
-
-    if response.status_code >= 400:
-        try:
-            error_detail = response.json().get('message', response.text)
-        except ValueError:
-            error_detail = response.text
-        raise RuntimeError(error_detail or f"Resend API error ({response.status_code})")
-
-    return response.json()
+    with smtplib.SMTP(smtp_config['server'], smtp_config['port'], timeout=30) as server:
+        server.starttls()
+        server.login(smtp_config['username'], smtp_config['password'])
+        server.send_message(message)
 
 
 def send_payment_pending_reminders(df_wings, df_fines, fy_label_text):
@@ -231,13 +218,13 @@ def send_payment_pending_reminders(df_wings, df_fines, fy_label_text):
     if pending.empty:
         return {'sent': [], 'skipped': [], 'failed': [], 'message': 'No pending payments found.'}
 
-    resend_config = get_resend_config()
-    if resend_config is None:
+    smtp_config = get_smtp_config()
+    if smtp_config is None:
         return {
             'sent': [],
-            'skipped': [{'wing': wing, 'reason': 'Resend not configured'} for wing in pending['Wing']],
+            'skipped': [{'wing': wing, 'reason': 'Email not configured'} for wing in pending['Wing']],
             'failed': [],
-            'message': 'Resend is not configured. Add [resend] settings in Streamlit Secrets.',
+            'message': 'Gmail SMTP is not configured. Add [smtp] settings in Streamlit Secrets.',
         }
 
     merged = pending.copy()
@@ -257,7 +244,7 @@ def send_payment_pending_reminders(df_wings, df_fines, fy_label_text):
         )
         for email in emails:
             try:
-                send_payment_reminder_email(resend_config, email, subject, text_body, html_body)
+                send_payment_reminder_email(smtp_config, email, subject, text_body, html_body)
                 sent.append({'wing': wing, 'email': email, 'pending': pending_amount})
             except Exception as exc:
                 failed.append({'wing': wing, 'email': email, 'error': str(exc)})
