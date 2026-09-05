@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+from email.message import EmailMessage
+from pathlib import Path
 import re
+import smtplib
+
+APP_DIR = Path(__file__).resolve().parent
+WING_CONTACTS_FILE = APP_DIR / "wing_contacts - Test.xlsx"
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 # ── Financial year helpers (Sep → Aug) ──────────────────────────────────────
 FY_MONTH_ORDER = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
@@ -83,6 +90,203 @@ def filter_df_by_fy(df, fy_start):
     if 'FY_Start' in df.columns:
         return df[df['FY_Start'] == fy_start].copy()
     return df.copy()
+
+
+@st.cache_data(show_spinner=False)
+def load_wing_contacts(contacts_path=str(WING_CONTACTS_FILE)):
+    """Load wing/shop email contacts from the local Excel file."""
+    path = Path(contacts_path)
+    if not path.is_file():
+        return pd.DataFrame(columns=['Wing', 'Email'])
+
+    df = pd.read_excel(path)
+    df.columns = [str(col).strip() for col in df.columns]
+
+    wing_col = next((col for col in df.columns if col.lower() == 'wing'), None)
+    email_col = next((col for col in df.columns if col.lower() == 'email'), None)
+    if wing_col is None or email_col is None:
+        return pd.DataFrame(columns=['Wing', 'Email'])
+
+    contacts = df[[wing_col, email_col]].copy()
+    contacts.columns = ['Wing', 'Email']
+    contacts['Wing'] = contacts['Wing'].astype(str).str.strip()
+    contacts['Email'] = contacts['Email'].astype(str).str.strip()
+    contacts = contacts[
+        contacts['Wing'].ne('')
+        & contacts['Email'].ne('')
+        & contacts['Email'].ne('nan')
+    ]
+    return contacts.drop_duplicates(subset=['Wing'], keep='first').reset_index(drop=True)
+
+
+def compute_wing_pending_summary(df_wings, df_fines):
+    """Return wings/shops with pending amount > 0 (after fines)."""
+    if df_wings is None or df_wings.empty:
+        return pd.DataFrame(columns=['Wing', 'Pending'])
+
+    summary = df_wings.groupby('Wing', as_index=False).agg(
+        total_difference=('Difference', 'sum'),
+    )
+
+    if df_fines is not None and not df_fines.empty:
+        fine_totals = df_fines.groupby('Wing', as_index=False).agg(
+            total_fines=('Total_Fine', 'sum'),
+        )
+        summary = summary.merge(fine_totals, on='Wing', how='left')
+        summary['total_fines'] = summary['total_fines'].fillna(0)
+    else:
+        summary['total_fines'] = 0.0
+
+    summary['Pending'] = summary['total_difference'] - summary['total_fines']
+    pending = summary[summary['Pending'] > 0][['Wing', 'Pending']].copy()
+    return pending.sort_values('Wing').reset_index(drop=True)
+
+
+def get_smtp_config():
+    """Read SMTP settings from Streamlit secrets."""
+    try:
+        smtp = st.secrets.get('smtp')
+        if not smtp:
+            return None
+        required = ('server', 'port', 'username', 'password')
+        if any(key not in smtp for key in required):
+            return None
+        return {
+            'server': str(smtp['server']),
+            'port': int(smtp['port']),
+            'username': str(smtp['username']),
+            'password': str(smtp['password']),
+            'from_email': str(smtp.get('from_email', smtp['username'])),
+        }
+    except Exception:
+        return None
+
+
+def build_payment_reminder_email(wing, pending_amount, fy_label_text):
+    subject = f"Zen Estate – Payment Pending Reminder ({wing})"
+    body = (
+        f"Dear Resident/Shop Owner,\n\n"
+        f"This is a reminder that your pending maintenance payment for {wing} "
+        f"is ₹{pending_amount:,.2f} for financial year {fy_label_text}.\n\n"
+        f"Please clear the outstanding amount at your earliest convenience.\n\n"
+        f"Regards,\n"
+        f"Zen Estate Management"
+    )
+    return subject, body
+
+
+def send_payment_reminder_email(smtp_config, to_email, subject, body):
+    if not EMAIL_PATTERN.match(to_email):
+        raise ValueError(f"Invalid email address: {to_email}")
+
+    message = EmailMessage()
+    message['Subject'] = subject
+    message['From'] = smtp_config['from_email']
+    message['To'] = to_email
+    message.set_content(body)
+
+    with smtplib.SMTP(smtp_config['server'], smtp_config['port'], timeout=30) as server:
+        server.starttls()
+        server.login(smtp_config['username'], smtp_config['password'])
+        server.send_message(message)
+
+
+def send_payment_pending_reminders(df_wings, df_fines, fy_label_text):
+    """Email all wings/shops where pending amount > 0."""
+    pending = compute_wing_pending_summary(df_wings, df_fines)
+    if pending.empty:
+        return {'sent': [], 'skipped': [], 'failed': [], 'message': 'No pending payments found.'}
+
+    contacts = load_wing_contacts()
+    if contacts.empty:
+        return {
+            'sent': [],
+            'skipped': pending['Wing'].tolist(),
+            'failed': [],
+            'message': f'Wing contacts file not found or empty: {WING_CONTACTS_FILE.name}',
+        }
+
+    smtp_config = get_smtp_config()
+    if smtp_config is None:
+        return {
+            'sent': [],
+            'skipped': pending['Wing'].tolist(),
+            'failed': [],
+            'message': 'SMTP is not configured. Add [smtp] settings in .streamlit/secrets.toml.',
+        }
+
+    merged = pending.merge(contacts, on='Wing', how='left')
+    sent, skipped, failed = [], [], []
+
+    for _, row in merged.iterrows():
+        wing = row['Wing']
+        pending_amount = float(row['Pending'])
+        email = row.get('Email')
+
+        if pd.isna(email) or not str(email).strip():
+            skipped.append({'wing': wing, 'reason': 'No email in contacts file'})
+            continue
+
+        email = str(email).strip()
+        subject, body = build_payment_reminder_email(wing, pending_amount, fy_label_text)
+        try:
+            send_payment_reminder_email(smtp_config, email, subject, body)
+            sent.append({'wing': wing, 'email': email, 'pending': pending_amount})
+        except Exception as exc:
+            failed.append({'wing': wing, 'email': email, 'error': str(exc)})
+
+    return {'sent': sent, 'skipped': skipped, 'failed': failed, 'message': ''}
+
+
+def render_payment_reminder_controls(df_wings, df_fines, fy_label_text, session_key):
+    """Wings tab button to email payment reminders for pending amounts."""
+    pending = compute_wing_pending_summary(df_wings, df_fines)
+    contacts = load_wing_contacts()
+
+    if pending.empty:
+        st.caption("No wings/shops with pending payment for this financial year.")
+    else:
+        st.caption(f"{len(pending)} wing(s)/shop(s) have pending payment.")
+
+    if not contacts.empty:
+        with st.expander("Preview reminder recipients", expanded=False):
+            preview = pending.merge(contacts, on='Wing', how='left')
+            preview['Email'] = preview['Email'].fillna('— missing —')
+            preview['Pending'] = preview['Pending'].map(lambda value: f"₹{value:,.2f}")
+            st.dataframe(
+                preview.rename(columns={'Wing': 'Wing/Shop', 'Pending': 'Pending Amount'}),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    if st.button(
+        "Send Payment pending reminder",
+        type="primary",
+        key=f"send_payment_reminder_{session_key}",
+        use_container_width=True,
+    ):
+        with st.spinner("Sending payment pending reminders..."):
+            result = send_payment_pending_reminders(df_wings, df_fines, fy_label_text)
+
+        if result['message'] and not result['sent']:
+            st.warning(result['message'])
+
+        if result['sent']:
+            st.success(f"Sent {len(result['sent'])} reminder email(s).")
+            for item in result['sent']:
+                st.write(f"✅ {item['wing']} → {item['email']} (₹{item['pending']:,.2f})")
+
+        if result['skipped']:
+            st.warning(f"Skipped {len(result['skipped'])} wing(s)/shop(s).")
+            for item in result['skipped']:
+                wing = item['wing'] if isinstance(item, dict) else item
+                reason = item.get('reason', 'No email in contacts file') if isinstance(item, dict) else 'No email in contacts file'
+                st.write(f"⚠️ {wing}: {reason}")
+
+        if result['failed']:
+            st.error(f"Failed to send {len(result['failed'])} email(s).")
+            for item in result['failed']:
+                st.write(f"❌ {item['wing']} ({item['email']}): {item['error']}")
 
 
 # Months excluded from petty cash (incomplete / unreliable data)
@@ -1626,7 +1830,9 @@ def main():
                     )
 
                 with col2:
-                    st.write("")
+                    render_payment_reminder_controls(
+                        df_wings, df_fines, selected_fy_label, selected_fy
+                    )
 
                 wing_shop_data = df_wings[df_wings['Wing'] == selected_wing_shop].copy()
 
