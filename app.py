@@ -121,7 +121,6 @@ PETTY_CASH_SHEETS = [
     ("May 2026", "May 2026"),
     ("June 2026", "Jun 2026"),
     ("July 2026", "Jul 2026"),
-    ("AUGUST 26", "Aug 2026"),
 ]
 
 PETTY_CASH_URL = (
@@ -820,16 +819,16 @@ def render_petty_cash():
 
     month_keys = list(petty_data.keys())
     first_month = month_keys[0]
-    last_month = month_keys[-1]
+    calc_last_month = month_keys[-1]  # Jul 2026 — Aug 2026 excluded (no data in file)
     ob_sep = petty_data[first_month]["ob"]
     total_cr = sum(m["tc"] for m in petty_data.values())
     total_db = sum(m["td"] for m in petty_data.values())
-    overall_cb = petty_data[last_month]["cb"]
+    overall_cb = petty_data[calc_last_month]["cb"]
 
     st.markdown(
         "<div class='sec-header' "
         "style='background:linear-gradient(90deg,#312E81,#6366F1);margin-top:1.5rem;'>"
-        f"💵 Petty Cash - Monthly Expense Details ({first_month} - {last_month})</div>",
+        "💵 Petty Cash - Monthly Expense Details (Sep 2025 - Aug 2026)</div>",
         unsafe_allow_html=True,
     )
 
@@ -841,24 +840,40 @@ def render_petty_cash():
         <div class='metric-sub'>Carried forward from previous period</div>
       </div>
       <div class='metric-card mc-green'>
-        <div class='metric-label'>Total Credited</div>
+        <div class='metric-label'>Total Credited (Sep - Jul)</div>
         <div class='metric-value'>₹{total_cr:,.0f}</div>
         <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card mc-red'>
-        <div class='metric-label'>Total Debited</div>
+        <div class='metric-label'>Total Debited (Sep - Jul)</div>
         <div class='metric-value'>₹{total_db:,.0f}</div>
         <div class='metric-sub'>Across {len(month_keys)} months</div>
       </div>
       <div class='metric-card' style='background:linear-gradient(135deg,#1E3A5F,#2563EB);'>
-        <div class='metric-label'>Closing Balance ({last_month})</div>
+        <div class='metric-label'>Closing Balance ({calc_last_month})</div>
         <div class='metric-value'>-₹{abs(overall_cb):,.0f}</div>
         <div class='metric-sub'>{ob_sep:,.0f} + {total_cr:,.0f} - {total_db:,.0f} = {overall_cb:,.0f}</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    selected_m = st.selectbox("Select Month:", month_keys, key="petty_month_sel")
+    st.markdown('<span id="petty-month-anchor"></span>', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    #petty-month-anchor ~ div [data-testid="stSelectbox"] label p {
+        font-weight: 700 !important;
+        color: #92400E !important;
+        font-size: 1.05rem !important;
+    }
+    #petty-month-anchor ~ div [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        background: #FFFBEB !important;
+        border: 2px solid #F59E0B !important;
+        border-radius: 10px !important;
+        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    selected_m = st.selectbox("📅 Select Month:", month_keys, key="petty_month_sel")
     md = petty_data[selected_m]
 
     c1, c2, c3, c4 = st.columns(4)
@@ -871,7 +886,7 @@ def render_petty_cash():
         "Sep 2025": "#cce5ff", "Oct 2025": "#ffe5cc", "Nov 2025": "#d9ccff",
         "Dec 2025": "#fff0b3", "Jan 2026": "#ffccdd", "Feb 2026": "#b3f0e0",
         "Mar 2026": "#fff3b3", "Apr 2026": "#ccf0cc", "May 2026": "#f0ccff",
-        "Jun 2026": "#ffd6cc", "Jul 2026": "#ccf5ff", "Aug 2026": "#e8d5ff",
+        "Jun 2026": "#ffd6cc", "Jul 2026": "#ccf5ff",
     }
     bg = month_colors.get(selected_m, "#ffffff")
 
