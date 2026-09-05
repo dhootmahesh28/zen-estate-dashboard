@@ -175,11 +175,10 @@ st.markdown("""
 
     /* ── Main title ── */
     .main-header-bar {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
         align-items: center;
-        justify-content: space-between;
         gap: 1rem;
-        flex-wrap: wrap;
         padding: 1.35rem 1.5rem;
         border-radius: 18px;
         background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%);
@@ -188,10 +187,11 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(30, 58, 138, 0.35);
     }
     .main-header {
+        grid-column: 2;
         font-size: 2.35rem;
         font-weight: 800;
         color: #ffffff;
-        text-align: left;
+        text-align: center;
         margin: 0;
         padding: 0;
         letter-spacing: 0.03em;
@@ -200,8 +200,11 @@ st.markdown("""
         background: none;
         border: none;
         box-shadow: none;
+        white-space: nowrap;
     }
     .main-header-fy {
+        grid-column: 3;
+        justify-self: end;
         font-size: 1.15rem;
         font-weight: 800;
         color: #ffffff;
