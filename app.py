@@ -8,22 +8,22 @@ import requests
 RESEND_API_URL = "https://api.resend.com/emails"
 DEFAULT_RESEND_FROM = "Zen Estate <onboarding@resend.dev>"
 
-# Hardcoded wing/shop email contacts (test — update emails before production)
+# Wing/shop email contacts (from wing_contacts.xlsx)
 WING_CONTACT_EMAILS = {
-    "A Wing": "dhootmahesh28@gmail.com",
-    "A Shop": "dhootmahesh28@gmail.com",
-    "B Wing": "dhootmahesh28@gmail.com",
-    "B Shop": "dhootmahesh28@gmail.com",
-    "C Wing": "dhootmahesh28@gmail.com",
-    "C Shop": "dhootmahesh28@gmail.com",
-    "D Wing": "dhootmahesh28@gmail.com",
-    "D Shop": "dhootmahesh28@gmail.com",
-    "E Wing": "dhootmahesh28@gmail.com",
-    "E Shop": "dhootmahesh28@gmail.com",
-    "F Wing": "dhootmahesh28@gmail.com",
-    "G Wing": "dhootmahesh28@gmail.com",
-    "H Wing": "dhootmahesh28@gmail.com",
-    "I Wing": "dhootmahesh28@gmail.com",
+    "A Wing": ["chairman.a.wing.zenestate@gmail.com"],
+    "A Shop": ["kodresagar45@gmail.com"],
+    "B Wing": ["zenestate_b_chairman@hotmail.com"],
+    "B Shop": ["kodresagar45@gmail.com"],
+    "C Wing": ["zenestate_c_chairman@hotmail.com"],
+    "C Shop": ["kodresagar45@gmail.com", "rahulkodre27@gmail.com"],
+    "D Wing": ["rahulkodre27@gmail.com"],
+    "D Shop": ["rahulkodre27@gmail.com"],
+    "E Wing": ["zenestate_e_chairman@hotmail.com"],
+    "E Shop": ["rahulkodre27@gmail.com"],
+    "F Wing": ["zenestate_f_chairman@hotmail.com"],
+    "G Wing": ["zenestate_g_chairman@hotmail.com"],
+    "H Wing": ["zenestate_h_chairman@hotmail.com"],
+    "I Wing": ["zenestate.iwing@gmail.com"],
 }
 WING_CONTACT_ALIASES = {
     "C Shop Total": "C Shop",
@@ -111,14 +111,20 @@ def filter_df_by_fy(df, fy_start):
     return df.copy()
 
 
-def get_wing_contact_email(wing):
-    """Return email for a wing/shop, resolving aliases like C Shop Total → C Shop."""
+def get_wing_contact_emails(wing):
+    """Return all emails for a wing/shop, resolving aliases like C Shop Total → C Shop."""
     if wing in WING_CONTACT_EMAILS:
-        return WING_CONTACT_EMAILS[wing]
+        return list(WING_CONTACT_EMAILS[wing])
     alias = WING_CONTACT_ALIASES.get(wing)
     if alias:
-        return WING_CONTACT_EMAILS.get(alias)
-    return None
+        return list(WING_CONTACT_EMAILS.get(alias, []))
+    return []
+
+
+def get_wing_contact_email(wing):
+    """Return comma-separated emails for display."""
+    emails = get_wing_contact_emails(wing)
+    return ", ".join(emails) if emails else None
 
 
 def compute_wing_pending_summary(df_wings, df_fines):
@@ -153,27 +159,51 @@ def get_resend_config():
         return {
             'api_key': str(resend_cfg['api_key']),
             'from_email': str(resend_cfg.get('from_email', DEFAULT_RESEND_FROM)),
+            'reply_to': str(resend_cfg.get('reply_to', 'zenestatedashboard@gmail.com')),
         }
     except Exception:
         return None
 
 
 def build_payment_reminder_email(wing, pending_amount, fy_label_text):
+    """Build payment reminder email for one wing/shop."""
+    amount_str = f"₹{pending_amount:,.2f}"
     subject = f"Zen Estate – Payment Pending Reminder ({wing})"
-    body = (
+
+    text = (
         f"Dear Resident/Shop Owner,\n\n"
-        f"This is a reminder that your pending maintenance payment for {wing} "
-        f"is ₹{pending_amount:,.2f} for financial year {fy_label_text}.\n\n"
+        f"This is a reminder that your Maintenance Payment is pending for {wing} "
+        f"is {amount_str} for financial year {fy_label_text}.\n\n"
         f"Please clear the outstanding amount at your earliest convenience.\n\n"
         f"Regards,\n"
         f"Zen Estate Management"
     )
-    return subject, body
+
+    html = f"""
+    <div style="font-family:Arial,sans-serif;color:#111827;max-width:640px;line-height:1.6;">
+      <p><strong>Dear Resident/Shop Owner,</strong></p>
+      <p>This is a reminder that your Maintenance Payment is pending for
+      <strong>{wing}</strong> is <strong>{amount_str}</strong> for financial year
+      <strong>{fy_label_text}</strong>.</p>
+      <p><strong>Please clear the outstanding amount at your earliest convenience.</strong></p>
+      <p>Regards,<br><strong>Zen Estate Management</strong></p>
+    </div>
+    """
+    return subject, text, html
 
 
-def send_payment_reminder_email(resend_config, to_email, subject, body):
+def send_payment_reminder_email(resend_config, to_email, subject, text_body, html_body):
     if not EMAIL_PATTERN.match(to_email):
         raise ValueError(f"Invalid email address: {to_email}")
+
+    payload = {
+        'from': resend_config['from_email'],
+        'to': [to_email],
+        'subject': subject,
+        'text': text_body,
+        'html': html_body,
+        'reply_to': resend_config['reply_to'],
+    }
 
     response = requests.post(
         RESEND_API_URL,
@@ -181,12 +211,7 @@ def send_payment_reminder_email(resend_config, to_email, subject, body):
             'Authorization': f"Bearer {resend_config['api_key']}",
             'Content-Type': 'application/json',
         },
-        json={
-            'from': resend_config['from_email'],
-            'to': [to_email],
-            'subject': subject,
-            'text': body,
-        },
+        json=payload,
         timeout=30,
     )
 
@@ -216,25 +241,26 @@ def send_payment_pending_reminders(df_wings, df_fines, fy_label_text):
         }
 
     merged = pending.copy()
-    merged['Email'] = merged['Wing'].map(get_wing_contact_email)
     sent, skipped, failed = [], [], []
 
     for _, row in merged.iterrows():
         wing = row['Wing']
         pending_amount = float(row['Pending'])
-        email = row.get('Email')
+        emails = get_wing_contact_emails(wing)
 
-        if pd.isna(email) or not str(email).strip():
+        if not emails:
             skipped.append({'wing': wing, 'reason': 'No email configured for this wing/shop'})
             continue
 
-        email = str(email).strip()
-        subject, body = build_payment_reminder_email(wing, pending_amount, fy_label_text)
-        try:
-            send_payment_reminder_email(resend_config, email, subject, body)
-            sent.append({'wing': wing, 'email': email, 'pending': pending_amount})
-        except Exception as exc:
-            failed.append({'wing': wing, 'email': email, 'error': str(exc)})
+        subject, text_body, html_body = build_payment_reminder_email(
+            wing, pending_amount, fy_label_text
+        )
+        for email in emails:
+            try:
+                send_payment_reminder_email(resend_config, email, subject, text_body, html_body)
+                sent.append({'wing': wing, 'email': email, 'pending': pending_amount})
+            except Exception as exc:
+                failed.append({'wing': wing, 'email': email, 'error': str(exc)})
 
     return {'sent': sent, 'skipped': skipped, 'failed': failed, 'message': ''}
 
@@ -259,7 +285,7 @@ def render_payment_reminder_controls(df_wings, df_fines, fy_label_text, session_
         )
 
     if st.button(
-        "Send Payment pending reminder",
+        "Send Pending Payment Reminder",
         type="primary",
         key=f"send_payment_reminder_{session_key}",
         use_container_width=True,
