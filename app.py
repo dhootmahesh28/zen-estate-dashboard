@@ -1,19 +1,14 @@
 import streamlit as st
-from auth import authentication_ui  # Import our new function
+from auth import authentication_ui
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Zen Estate Dashboard", layout="wide")
 
-# ------------------------------------------------------------------
-# AUTHENTICATION GATE
-# ------------------------------------------------------------------
-if not authentication_ui():
-    st.stop()  # Stop execution – user is not approved yet
+if not authentication_ui.stop()
 
-# ------------------------------------------------------------------
-# YOUR DASHBOARD CONTENT (only shown if user is approved)
-# ------------------------------------------------------------------
+# ===== YOUR DASHBOARD CODE BELOW =====
 st.title("🏠 Zen Estate Financial Dashboard")
-# ... (your existing dashboard code)
+# ... (your existing dashboard)
+
 
 import pandas as pd
 import plotly.graph_objects as go

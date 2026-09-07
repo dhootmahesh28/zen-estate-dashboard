@@ -3,32 +3,79 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-import phonenumbers
+import re
 
 # ------------------------------------------------------------------
 # CONFIGURATION – Replace with your own details
 # ------------------------------------------------------------------
-ADMIN_EMAIL = "your-email@gmail.com"          # Your Gmail address
-ADMIN_PASSWORD = "abcd efgh ijkl mnop"        # Gmail app password (16 chars)
-ADMIN_LOGIN_PASSWORD = "admin123"             # Password to login as admin in the app
+ADMIN_EMAIL = "your-email@gmail.com"
+ADMIN_PASSWORD = "abcd efgh ijkl mnop"  # Gmail app password
+ADMIN_LOGIN_PASSWORD = "admin123"       # Dashboard admin password
 
 # In-memory stores (replace with SQLite/Google Sheets for persistence)
-PENDING_USERS = {}   # {phone: request_time}
-APPROVED_USERS = {}  # {phone: approved_time}
+PENDING_USERS = {}  # {phone: request_time}
+APPROVED_USERS = {} # {phone: approved_time}
 
 # ------------------------------------------------------------------
-# EMAIL SENDING FUNCTION
+# INDIAN PHONE NUMBER VALIDATION
 # ------------------------------------------------------------------
-def send_new_user_email(phone_number):
-    """Send email to admin when a new user requests access."""
-    subject = f"🔔 New Dashboard Access Request from {phone_number}"
+def verify_indian_phone(phone):
+    """
+    Validates Indian mobile numbers:
+    - Must start with +91 or 0
+    - Must be 10 digits after that
+    - Must start with 6,7,8,9
+    """
+    # Remove spaces, dashes, brackets
+    cleaned = re.sub(r'[\s\-\(\)]+', '', phone.strip())
+    
+    # Check for +91 or 91 or 0 prefix
+    if cleaned.startswith('+91'):
+        number = cleaned[3:]  # Remove +91
+    elif cleaned.startswith('91'):
+        number = cleaned[2:]  # Remove 91
+    elif cleaned.startswith('0'):
+        number = cleaned[1:]  # Remove leading 0 (landline style)
+    else:
+        number = cleaned  # Assume it's 10-digit mobile number
+    
+    # Indian mobile numbers: 10 digits, first digit is 6-9
+    if re.match(r'^[6-9]\d{9}$', number):
+        return True
+    else:
+        return False
+
+def normalize_indian_phone(phone):
+    """Return standardized Indian mobile number: +91XXXXXXXXXX"""
+    cleaned = re.sub(r'[\s\-\(\)]+', '', phone.strip())
+    # Extract digits only
+    digits = re.sub(r'\D', '', cleaned)
+    
+    # Handle various prefixes
+    if digits.startswith('91') and len(digits) == 12:
+        return f"+{digits}"  # Already +91 format
+    elif digits.startswith('0') and len(digits) == 11:
+        return f"+91{digits[1:]}"  # Remove leading 0
+    elif len(digits) == 10:
+        return f"+91{digits}"  # Add country code
+    else:
+        return cleaned  # Fallback
+
+# ------------------------------------------------------------------
+# EMAIL NOTIFICATION
+# ------------------------------------------------------------------
+def send_new_user_email(phone_normalized):
+    """Send email to admin when new user requests access."""
+    subject = f"🔔 New Dashboard Access Request: {phone_normalized}"
     body = f"""
-    A new user has requested access to the Zen Estate Financial Dashboard.
+    ➡️ New access request for Zen Estate Dashboard!
     
-    📱 Phone: {phone_number}
-    🕐 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    📱 Phone: {phone_normalized}
+    ⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     
-    Action: Log in to the app as admin to approve or reject this request.
+    ✅ Approve or ❌ Reject in the app's admin panel.
+    
+    Dashboard URL: https://zen-estate-financial-dashboard.streamlit.app/
     """
     
     msg = MIMEMultipart()
@@ -49,46 +96,39 @@ def send_new_user_email(phone_number):
         return False
 
 # ------------------------------------------------------------------
-# PHONE NUMBER VALIDATION
-# ------------------------------------------------------------------
-def verify_phone(phone):
-    try:
-        parsed = phonenumbers.parse(phone, None)
-        return phonenumbers.is_valid_number(parsed)
-    except:
-        return False
-
-# ------------------------------------------------------------------
-# APPROVAL PANEL (shown only to admin)
+# ADMIN APPROVAL PANEL
 # ------------------------------------------------------------------
 def admin_panel():
+    """Show pending requests with approve/reject buttons."""
     st.sidebar.markdown("---")
-    st.sidebar.subheader("👤 Admin Panel")
-    if PENDING_USERS:
-        st.sidebar.write("**Pending Requests:**")
-        for phone, req_time in list(PENDING_USERS.items()):
-            col1, col2, col3 = st.sidebar.columns([2, 1, 1])
-            with col1:
-                st.write(f"📱 {phone}")
-            with col2:
-                if st.button("✅ Approve", key=f"ap_{phone}"):
-                    APPROVED_USERS[phone] = datetime.now()
-                    del PENDING_USERS[phone]
-                    st.sidebar.success(f"Approved {phone}")
-                    st.rerun()
-            with col3:
-                if st.button("❌ Reject", key=f"rj_{phone}"):
-                    del PENDING_USERS[phone]
-                    st.sidebar.warning(f"Rejected {phone}")
-                    st.rerun()
-    else:
+    st.sidebar.subheader("✅ Admin Approval Panel")
+    
+    if not PENDING_USERS:
         st.sidebar.info("No pending requests")
+        return
+    
+    for phone, req_time in list(PENDING_USERS.items()):
+        col1, col2, col3 = st.sidebar.columns([2, 1, 1])
+        with col1:
+            st.code(phone)
+            st.caption(f"Requested: {req_time.strftime('%H:%M')}")
+        with col2:
+            if st.button("✅ Approve", key=f"ap_{phone}"):
+                APPROVED_USERS[phone] = datetime.now()
+                del PENDING_USERS[phone]
+                st.sidebar.success(f"Approved {phone}")
+                st.rerun()
+        with col3:
+            if st.button("❌ Reject", key=f"rj_{phone}"):
+                del PENDING_USERS[phone]
+                st.sidebar.warning(f"Rejected {phone}")
+                st.rerun()
 
 # ------------------------------------------------------------------
-# AUTHENTICATION UI
+# AUTHENTICATION UI GATE
 # ------------------------------------------------------------------
 def authentication_ui():
-    """Show login/request form. Returns True if user is approved."""
+    """Returns True if user is approved, otherwise shows request form."""
     
     # Initialize session state
     if 'user_phone' not in st.session_state:
@@ -96,48 +136,58 @@ def authentication_ui():
     if 'is_admin' not in st.session_state:
         st.session_state.is_admin = False
     
-    # If already approved, return True
-    if st.session_state.user_phone:
+    # Already approved
+    if st.session_state.user_phone and st.session_state.user_phone in APPROVED_USERS:
         return True
     
-    # Not logged in – show request form
+    # Show request form
     st.title("🔐 Access Required")
-    st.write("Enter your mobile number to request access to the dashboard.")
+    st.write("Zen Estate Financial Dashboard")
+    st.info("Enter your **Indian mobile number** (+91) to request access.")
     
-    phone = st.text_input("Mobile Number (e.g., +1234567890)", placeholder="+1 (555) 123-4567")
+    phone = st.text_input("Mobile Number", 
+                         placeholder="+91 9876543210 or 9876543210",
+                         help="Indian mobile number (10 digits, starting with 6-9)")
     
     if st.button("Request Access"):
         if not phone:
             st.error("Please enter a phone number")
-        elif not verify_phone(phone):
-            st.error("Invalid phone number format (include country code)")
-        elif phone in APPROVED_USERS:
-            st.success("You already have access! Redirecting...")
-            st.session_state.user_phone = phone
+            return False
+            
+        if not verify_indian_phone(phone):
+            st.error("Invalid Indian mobile number. It must be a 10-digit number starting with 6,7,8 or 9.")
+            return False
+        
+        normalized = normalize_indian_phone(phone)
+        
+        if normalized in APPROVED_USERS:
+            st.success("✅ You already have access! Loading dashboard...")
+            st.session_state.user_phone = normalized
             st.rerun()
-        elif phone in PENDING_USERS:
-            st.info("Your request is pending admin approval. Check back later.")
+            return True
+        elif normalized in PENDING_USERS:
+            st.info("⏳ Your request is pending admin approval.")
         else:
-            # Add to pending list and send email
-            PENDING_USERS[phone] = datetime.now()
-            email_sent = send_new_user_email(phone)
-            if email_sent:
-                st.success("✅ Access request submitted! An email notification has been sent to the admin. Please wait for approval.")
+            # Add to pending and notify admin
+            PENDING_USERS[normalized] = datetime.now()
+            if send_new_user_email(normalized):
+                st.success("✅ Request sent! Admin will be notified. Please wait for approval.")
             else:
-                st.warning("Request submitted but email notification failed. Admin may not see it immediately.")
+                st.warning("Request submitted but email notification failed. Admin may need to check manually.")
     
-    # Admin login (hidden in sidebar)
+    # Admin login section (hidden in sidebar)
     with st.sidebar:
         st.markdown("---")
         st.subheader("🔑 Admin Login")
-        pwd = st.text_input("Admin Password", type="password")
-        if st.button("Login"):
-            if pwd == ADMIN_LOGIN_PASSWORD:
-                st.session_state.is_admin = True
-                st.success("Logged in as admin")
-                st.rerun()
-            else:
-                st.error("Wrong password")
+        with st.form("admin_login"):
+            pwd = st.text_input("Password", type="password")
+            if st.form_submit_button("Login"):
+                if pwd == ADMIN_LOGIN_PASSWORD:
+                    st.session_state.is_admin = True
+                    st.success("Admin logged in")
+                    st.rerun()
+                else:
+                    st.error("Wrong password")
         
         if st.session_state.is_admin:
             admin_panel()
