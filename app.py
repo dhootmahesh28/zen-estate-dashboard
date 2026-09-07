@@ -3,11 +3,14 @@ from auth import authentication_ui
 
 st.set_page_config(page_title="Zen Estate Dashboard", layout="wide")
 
-if not authentication_ui.stop()
+# ✅ Corrected line:
+if not authentication_ui():
+    st.stop()
 
 # ===== YOUR DASHBOARD CODE BELOW =====
 st.title("🏠 Zen Estate Financial Dashboard")
 # ... (your existing dashboard)
+
 
 
 import pandas as pd
