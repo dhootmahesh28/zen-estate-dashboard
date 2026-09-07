@@ -3,13 +3,13 @@ from auth import authentication_ui
 
 st.set_page_config(page_title="Zen Estate Dashboard", layout="wide")
 
-# ✅ Corrected line:
 if not authentication_ui():
     st.stop()
 
-# ===== YOUR DASHBOARD CODE BELOW =====
+# ===== YOUR DASHBOARD CODE =====
 st.title("🏠 Zen Estate Financial Dashboard")
-# ... (your existing dashboard)
+# ... rest of your dashboard
+
 
 
 

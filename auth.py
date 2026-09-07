@@ -6,17 +6,17 @@ from datetime import datetime
 import re
 
 # ------------------------------------------------------------------
-# CONFIGURATION – Now reads from Streamlit secrets
+# CONFIGURATION – Reads from Streamlit secrets
 # ------------------------------------------------------------------
 ADMIN_EMAIL = st.secrets["smtp"]["username"]          # your Gmail address
 ADMIN_PASSWORD = st.secrets["smtp"]["password"]       # app password
 SMTP_SERVER = st.secrets["smtp"]["server"]
 SMTP_PORT = st.secrets["smtp"]["port"]
 
-# Admin app login password (change this or read from secrets)
+# Admin app login password (change or read from secrets)
 ADMIN_LOGIN_PASSWORD = st.secrets.get("admin_password", "admin123")
 
-# In-memory stores (replace with SQLite/Google Sheets for persistence)
+# In-memory stores (replace with SQLite/Google Sheets for production)
 PENDING_USERS = {}
 APPROVED_USERS = {}
 
@@ -39,12 +39,12 @@ def normalize_indian_phone(phone):
     cleaned = re.sub(r'[\s\-\(\)]+', '', phone.strip())
     digits = re.sub(r'\D', '', cleaned)
     if digits.startswith('91') and len(digits) == 12:
-        return f"+{its}"
+        return f"+{digits}"
     elif digits.startswith('0') and len(digits) == 11:
         return f"+91{digits[1:]}"
     elif len(digits) == 10:
         return f"+91{digits}"
- return cleaned
+    return cleaned
 
 # ------------------------------------------------------------------
 # EMAIL NOTIFICATION (uses secrets)
@@ -119,11 +119,11 @@ def authentication_ui():
     if st.session_state.user_phone and st.session_state.user_phone in APPROVED_USERS:
         return True
     
-   .title("🔐 Access Required")
+    st.title("🔐 Access Required")
     st.write("Zen Estate Financial Dashboard")
     st.info("Enter your **Indian mobile number** (+91) to request access.")
     
-    = st.text_input("Mobile Number", 
+    phone = st.text_input("Mobile Number", 
                          placeholder="+91 9876543210 or 9876543210",
                          help="Indian mobile number (10 digits, starting with 6-9)")
     
@@ -159,7 +159,7 @@ def authentication_ui():
         with st.form("admin_login"):
             pwd = st.text_input("Password", type="password")
             if st.form_submit_button("Login"):
-                if p == ADMIN_LOGIN_PASSWORD:
+                if pwd == ADMIN_LOGIN_PASSWORD:
                     st.session_state.is_admin = True
                     st.success("Admin logged in")
                     st.rerun()
