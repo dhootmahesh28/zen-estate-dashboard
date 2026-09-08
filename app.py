@@ -1,18 +1,4 @@
 import streamlit as st
-from auth import authentication_ui
-
-st.set_page_config(page_title="Zen Estate Dashboard", layout="wide")
-
-if not authentication_ui():
-    st.stop()
-
-# ===== YOUR DASHBOARD CODE =====
-st.title("🏠 Zen Estate Financial Dashboard")
-# ... rest of your dashboard
-
-
-
-
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
