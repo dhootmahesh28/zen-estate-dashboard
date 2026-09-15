@@ -1,4 +1,18 @@
 import streamlit as st
+from auth import authentication_ui
+
+st.set_page_config(page_title="Zen Estate Dashboard", layout="wide")
+
+if not authentication_ui():
+    st.stop()
+
+# ===== YOUR DASHBOARD CODE =====
+st.title("🏠 Zen Estate Financial Dashboard")
+# ... rest of your dashboard
+
+
+
+
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
@@ -866,8 +880,11 @@ def load_leela_data():
             desc = df.iloc[row, 2] if df.shape[1] > 2 else None
             amt  = df.iloc[row, 3] if df.shape[1] > 3 else None
             if pd.notna(desc) and isinstance(desc, str) and desc.strip():
+                desc_clean = desc.strip()
+                if desc_clean.upper() == 'FD':
+                    continue
                 items.append({
-                    'Description': desc.strip(),
+                    'Description': desc_clean,
                     'Amount': float(amt) if pd.notna(amt) and isinstance(amt, (int, float)) else None
                 })
         return pd.DataFrame(items)
@@ -897,7 +914,8 @@ def load_excel_data(file):
             {'name': 'Apr', 'to_be_row': 128, 'received_row': 127, 'diff_row': 129, 'summary_row': 133, 'expense_col': 15},
             {'name': 'May', 'to_be_row': 147, 'received_row': 146, 'diff_row': 148, 'summary_row': 152, 'expense_col': 15},
             {'name': 'Jun', 'to_be_row': 166, 'received_row': 165, 'diff_row': 167, 'summary_row': 171, 'expense_col': 15},
-            {'name': 'Jul', 'to_be_row': 182, 'received_row': 181, 'diff_row': 183, 'summary_row': 187, 'expense_col': 15}
+            {'name': 'Jul', 'to_be_row': 182, 'received_row': 181, 'diff_row': 183, 'summary_row': 187, 'expense_col': 15},
+            {'name': 'Aug', 'to_be_row': 200, 'received_row': 199, 'diff_row': 201, 'summary_row': 205, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -917,7 +935,7 @@ def load_excel_data(file):
             # Compute Extra Income from breakdown row (sum cols 23-28) to match breakdown table
             breakdown_row_map = {
                 'Sep': 8, 'Oct': 28, 'Nov': 44, 'Dec': 61, 'Jan': 76,
-                'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181
+                'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181, 'Aug': 199
             }
             br = breakdown_row_map.get(month, month_info['summary_row'])
             extra_income = sum(
@@ -966,7 +984,10 @@ def load_excel_data(file):
             {'month': 'Feb', 'start': 88, 'end': 102},   # Feb vendor rows
             {'month': 'Mar', 'start': 104, 'end': 118},  # Mar vendor rows
             {'month': 'Apr', 'start': 121, 'end': 133},
-            {'month': 'May', 'start': 139, 'end': 152}    # May vendor rows
+            {'month': 'May', 'start': 139, 'end': 152},
+            {'month': 'Jun', 'start': 159, 'end': 173},
+            {'month': 'Jul', 'start': 175, 'end': 191},
+            {'month': 'Aug', 'start': 193, 'end': 209},
         ]
         
         for section in vendor_sections:
@@ -1004,7 +1025,8 @@ def load_excel_data(file):
             'Apr': 127,  # Total row for Apr
             'May': 146,  # Total row for May
             'Jun': 165,  # Total row for Jun
-            'Jul': 181   # Total row for Jul
+            'Jul': 181,  # Total row for Jul
+            'Aug': 199,  # Total row for Aug
         }
         
         for month, row_idx in month_rows.items():
@@ -1053,7 +1075,8 @@ def load_excel_data(file):
             {'month': 'Apr', 'vendor_row': 120},
             {'month': 'May', 'vendor_row': 138},
             {'month': 'Jun', 'vendor_row': 157},
-            {'month': 'Jul', 'vendor_row': 173}
+            {'month': 'Jul', 'vendor_row': 173},
+            {'month': 'Aug', 'vendor_row': 191},
         ]
         
         fine_data = {}  # keyed by (month, wing)
@@ -1126,7 +1149,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     # Set the year based on month
-    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"] else "2025"
+    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"] else "2025"
     
     fig.update_layout(
         title=f'Vendor Expense Breakdown ({month} {year})',
@@ -1279,7 +1302,7 @@ HEADER_COLORS = {
 
 MONTH_COLORS = {
     'Sep': '#cce5ff', 'Oct': '#ffe5cc', 'Nov': '#d9ccff', 'Dec': '#fff0b3',
-    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff', 'Jun': '#ffd6cc', 'Jul': '#ccf5ff',
+    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff', 'Jun': '#ffd6cc', 'Jul': '#ccf5ff', 'Aug': '#e9d5ff',
 }
 
 def render_html_table(df, fmt=None):
@@ -1716,7 +1739,7 @@ def main():
             # Build HTML table manually to support fine detail tags
             month_colors = {
                 'Sep':'#cce5ff','Oct':'#ffe5cc','Nov':'#d9ccff','Dec':'#fff0b3',
-                'Jan':'#ffccdd','Feb':'#b3f0e0','Mar':'#fff3b3','Apr':'#ccf0cc','May':'#f0ccff'
+                'Jan':'#ffccdd','Feb':'#b3f0e0','Mar':'#fff3b3','Apr':'#ccf0cc','May':'#f0ccff','Jun':'#ffd6cc','Jul':'#ccf5ff','Aug':'#e9d5ff'
             }
             header_cols = {
                 'Month':       '#555555',
@@ -1884,7 +1907,7 @@ def main():
                     if 'Wing' in wing_shop_display.columns:
                         wing_shop_display = wing_shop_display.drop('Wing', axis=1)
                     month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6,
-                                   'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
+                                   'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11, 'Aug': 12}
                     wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                     wing_shop_display = wing_shop_display.sort_values('month_sort').drop('month_sort', axis=1)
                     wing_shop_display = wing_shop_display.rename(columns={
@@ -1963,7 +1986,7 @@ def main():
                 detailed_breakdown['Fine_Amount'] = 0
 
             month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6,
-                           'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
+                           'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11, 'Aug': 12}
             detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
             detailed_breakdown = detailed_breakdown.sort_values(['Month_Sort', 'Wing']).drop('Month_Sort', axis=1)
             detailed_breakdown = detailed_breakdown.reset_index(drop=True)
