@@ -2,7 +2,31 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+from email.message import EmailMessage
 import re
+import smtplib
+
+# Wing/shop email contacts (from wing_contacts.xlsx)
+WING_CONTACT_EMAILS = {
+    "A Wing": ["chairman.a.wing.zenestate@gmail.com"],
+    "A Shop": ["kodresagar45@gmail.com"],
+    "B Wing": ["zenestate_b_chairman@hotmail.com"],
+    "B Shop": ["kodresagar45@gmail.com"],
+    "C Wing": ["zenestate_c_chairman@hotmail.com"],
+    "C Shop": ["kodresagar45@gmail.com", "rahulkodre27@gmail.com"],
+    "D Wing": ["rahulkodre27@gmail.com"],
+    "D Shop": ["rahulkodre27@gmail.com"],
+    "E Wing": ["zenestate_e_chairman@hotmail.com"],
+    "E Shop": ["rahulkodre27@gmail.com"],
+    "F Wing": ["zenestate_f_chairman@hotmail.com"],
+    "G Wing": ["zenestate_g_chairman@hotmail.com"],
+    "H Wing": ["zenestate_h_chairman@hotmail.com"],
+    "I Wing": ["zenestate.iwing@gmail.com"],
+}
+WING_CONTACT_ALIASES = {
+    "C Shop Total": "C Shop",
+}
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 # ── Financial year helpers (Sep → Aug) ──────────────────────────────────────
 FY_MONTH_ORDER = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
@@ -85,10 +109,202 @@ def filter_df_by_fy(df, fy_start):
     return df.copy()
 
 
-# Months excluded from petty cash (incomplete / unreliable data)
-PETTY_EXCLUDE_MONTHS = {"Aug 2026"}
+def get_wing_contact_emails(wing):
+    """Return all emails for a wing/shop, resolving aliases like C Shop Total → C Shop."""
+    if wing in WING_CONTACT_EMAILS:
+        return list(WING_CONTACT_EMAILS[wing])
+    alias = WING_CONTACT_ALIASES.get(wing)
+    if alias:
+        return list(WING_CONTACT_EMAILS.get(alias, []))
+    return []
 
-# Authoritative sheet names in the Petty Cash Excel workbook (Sep 2025 – Jul 2026)
+
+def get_wing_contact_email(wing):
+    """Return comma-separated emails for display."""
+    emails = get_wing_contact_emails(wing)
+    return ", ".join(emails) if emails else None
+
+
+def compute_wing_pending_summary(df_wings, df_fines):
+    """Return wings/shops with pending amount > 0 (after fines)."""
+    if df_wings is None or df_wings.empty:
+        return pd.DataFrame(columns=['Wing', 'Pending'])
+
+    summary = df_wings.groupby('Wing', as_index=False).agg(
+        total_difference=('Difference', 'sum'),
+    )
+
+    if df_fines is not None and not df_fines.empty:
+        fine_totals = df_fines.groupby('Wing', as_index=False).agg(
+            total_fines=('Total_Fine', 'sum'),
+        )
+        summary = summary.merge(fine_totals, on='Wing', how='left')
+        summary['total_fines'] = summary['total_fines'].fillna(0)
+    else:
+        summary['total_fines'] = 0.0
+
+    summary['Pending'] = summary['total_difference'] - summary['total_fines']
+    pending = summary[summary['Pending'] > 0][['Wing', 'Pending']].copy()
+    return pending.sort_values('Wing').reset_index(drop=True)
+
+
+def get_smtp_config():
+    """Read Gmail SMTP settings from Streamlit secrets."""
+    try:
+        smtp = st.secrets.get('smtp')
+        if not smtp:
+            return None
+        required = ('server', 'port', 'username', 'password')
+        if any(key not in smtp for key in required):
+            return None
+        return {
+            'server': str(smtp['server']),
+            'port': int(smtp['port']),
+            'username': str(smtp['username']),
+            'password': str(smtp['password']),
+            'from_email': str(smtp.get('from_email', smtp['username'])),
+        }
+    except Exception:
+        return None
+
+
+def build_payment_reminder_email(wing, pending_amount, fy_label_text):
+    """Build payment reminder email for one wing/shop."""
+    amount_str = f"₹{pending_amount:,.2f}"
+    subject = f"Zen Estate – Payment Pending Reminder ({wing})"
+
+    text = (
+        f"Dear Resident/Shop Owner,\n\n"
+        f"This is a reminder that your Maintenance Payment is pending for {wing} "
+        f"is {amount_str} for financial year {fy_label_text}.\n\n"
+        f"Please clear the outstanding amount at your earliest convenience.\n\n"
+        f"Regards,\n"
+        f"Zen Estate Management"
+    )
+
+    html = f"""
+    <div style="font-family:Arial,sans-serif;color:#111827;max-width:640px;line-height:1.6;">
+      <p><strong>Dear Resident/Shop Owner,</strong></p>
+      <p>This is a reminder that your Maintenance Payment is pending for
+      <strong>{wing}</strong> is <strong>{amount_str}</strong> for financial year
+      <strong>{fy_label_text}</strong>.</p>
+      <p><strong>Please clear the outstanding amount at your earliest convenience.</strong></p>
+      <p>Regards,<br><strong>Zen Estate Management</strong></p>
+    </div>
+    """
+    return subject, text, html
+
+
+def send_payment_reminder_email(smtp_config, to_email, subject, text_body, html_body):
+    if not EMAIL_PATTERN.match(to_email):
+        raise ValueError(f"Invalid email address: {to_email}")
+
+    message = EmailMessage()
+    message['Subject'] = subject
+    message['From'] = smtp_config['from_email']
+    message['To'] = to_email
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype='html')
+
+    with smtplib.SMTP(smtp_config['server'], smtp_config['port'], timeout=30) as server:
+        server.starttls()
+        server.login(smtp_config['username'], smtp_config['password'])
+        server.send_message(message)
+
+
+def send_payment_pending_reminders(df_wings, df_fines, fy_label_text):
+    """Email all wings/shops where pending amount > 0."""
+    pending = compute_wing_pending_summary(df_wings, df_fines)
+    if pending.empty:
+        return {'sent': [], 'skipped': [], 'failed': [], 'message': 'No pending payments found.'}
+
+    smtp_config = get_smtp_config()
+    if smtp_config is None:
+        return {
+            'sent': [],
+            'skipped': [{'wing': wing, 'reason': 'Email not configured'} for wing in pending['Wing']],
+            'failed': [],
+            'message': 'Gmail SMTP is not configured. Add [smtp] settings in Streamlit Secrets.',
+        }
+
+    merged = pending.copy()
+    sent, skipped, failed = [], [], []
+
+    for _, row in merged.iterrows():
+        wing = row['Wing']
+        pending_amount = float(row['Pending'])
+        emails = get_wing_contact_emails(wing)
+
+        if not emails:
+            skipped.append({'wing': wing, 'reason': 'No email configured for this wing/shop'})
+            continue
+
+        subject, text_body, html_body = build_payment_reminder_email(
+            wing, pending_amount, fy_label_text
+        )
+        for email in emails:
+            try:
+                send_payment_reminder_email(smtp_config, email, subject, text_body, html_body)
+                sent.append({'wing': wing, 'email': email, 'pending': pending_amount})
+            except Exception as exc:
+                failed.append({'wing': wing, 'email': email, 'error': str(exc)})
+
+    return {'sent': sent, 'skipped': skipped, 'failed': failed, 'message': ''}
+
+
+def render_payment_reminder_controls(df_wings, df_fines, fy_label_text, session_key):
+    """Wings tab button to email payment reminders for pending amounts."""
+    pending = compute_wing_pending_summary(df_wings, df_fines)
+
+    if pending.empty:
+        st.caption("No wings/shops with pending payment for this financial year.")
+    else:
+        st.caption(f"{len(pending)} wing(s)/shop(s) have pending payment.")
+
+    with st.expander("Preview reminder recipients", expanded=False):
+        preview = pending.copy()
+        preview['Email'] = preview['Wing'].map(get_wing_contact_email).fillna('— missing —')
+        preview['Pending'] = preview['Pending'].map(lambda value: f"₹{value:,.2f}")
+        st.dataframe(
+            preview.rename(columns={'Wing': 'Wing/Shop', 'Pending': 'Pending Amount'}),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    if st.button(
+        "Send Pending Payment Reminder",
+        type="primary",
+        key=f"send_payment_reminder_{session_key}",
+        use_container_width=True,
+    ):
+        with st.spinner("Sending payment pending reminders..."):
+            result = send_payment_pending_reminders(df_wings, df_fines, fy_label_text)
+
+        if result['message'] and not result['sent']:
+            st.warning(result['message'])
+
+        if result['sent']:
+            st.success(f"Sent {len(result['sent'])} reminder email(s).")
+            for item in result['sent']:
+                st.write(f"✅ {item['wing']} → {item['email']} (₹{item['pending']:,.2f})")
+
+        if result['skipped']:
+            st.warning(f"Skipped {len(result['skipped'])} wing(s)/shop(s).")
+            for item in result['skipped']:
+                wing = item['wing'] if isinstance(item, dict) else item
+                reason = item.get('reason', 'No email configured') if isinstance(item, dict) else 'No email configured'
+                st.write(f"⚠️ {wing}: {reason}")
+
+        if result['failed']:
+            st.error(f"Failed to send {len(result['failed'])} email(s).")
+            for item in result['failed']:
+                st.write(f"❌ {item['wing']} ({item['email']}): {item['error']}")
+
+
+# Months excluded from petty cash (incomplete / unreliable data)
+PETTY_EXCLUDE_MONTHS = set()
+
+# Authoritative sheet names in the Petty Cash Excel workbook (Sep 2025 – Aug 2026)
 PETTY_CASH_SHEETS = [
     ("September 2025", "Sep 2025"),
     ("October 2025", "Oct 2025"),
@@ -101,6 +317,7 @@ PETTY_CASH_SHEETS = [
     ("May 2026", "May 2026"),
     ("June 2026", "Jun 2026"),
     ("July 2026", "Jul 2026"),
+    ("AUGUST 26", "Aug 2026"),
 ]
 
 
@@ -175,11 +392,10 @@ st.markdown("""
 
     /* ── Main title ── */
     .main-header-bar {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
         align-items: center;
-        justify-content: space-between;
         gap: 1rem;
-        flex-wrap: wrap;
         padding: 1.35rem 1.5rem;
         border-radius: 18px;
         background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%);
@@ -188,10 +404,11 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(30, 58, 138, 0.35);
     }
     .main-header {
+        grid-column: 2;
         font-size: 2.35rem;
         font-weight: 800;
         color: #ffffff;
-        text-align: left;
+        text-align: center;
         margin: 0;
         padding: 0;
         letter-spacing: 0.03em;
@@ -200,8 +417,11 @@ st.markdown("""
         background: none;
         border: none;
         box-shadow: none;
+        white-space: nowrap;
     }
     .main-header-fy {
+        grid-column: 3;
+        justify-self: end;
         font-size: 1.15rem;
         font-weight: 800;
         color: #ffffff;
@@ -323,6 +543,30 @@ st.markdown("""
         padding-top: 1.25rem;
     }
 
+    /* ── Global colorful dropdown styling (all selectboxes) ── */
+    [data-testid="stSelectbox"] label p {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #1E3A8A !important;
+        letter-spacing: 0.02em !important;
+    }
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 50%, #93c5fd 100%) !important;
+        border: 2px solid #1D4ED8 !important;
+        border-radius: 12px !important;
+        min-height: 52px !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 3px rgba(59, 130, 246, 0.22) !important;
+    }
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div > div {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #1e3a8a !important;
+    }
+    [data-testid="stSelectbox"] div[data-baseweb="select"] svg {
+        color: #1d4ed8 !important;
+        fill: #1d4ed8 !important;
+    }
+
     /* ── Petty cash month picker highlight ── */
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) {
         background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%) !important;
@@ -339,11 +583,11 @@ st.markdown("""
         letter-spacing: 0.02em !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) div[data-baseweb="select"] > div {
-        background: #FFFFFF !important;
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%) !important;
         border: 2px solid #B45309 !important;
         border-radius: 10px !important;
         min-height: 50px !important;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.06), 0 0 0 3px rgba(251, 191, 36, 0.45) !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 3px rgba(251, 191, 36, 0.45) !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#petty-picker-marker) div[data-baseweb="select"] > div > div {
         font-size: 1.08rem !important;
@@ -368,16 +612,33 @@ st.markdown("""
         letter-spacing: 0.03em !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div {
-        background: #FFFFFF !important;
+        background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 50%, #60a5fa 100%) !important;
         border: 2px solid #1D4ED8 !important;
         border-radius: 12px !important;
         min-height: 54px !important;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05), 0 0 0 4px rgba(59, 130, 246, 0.25) !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 4px rgba(59, 130, 246, 0.3) !important;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:has(#fy-picker-marker) div[data-baseweb="select"] > div > div {
         font-size: 1.1rem !important;
         font-weight: 800 !important;
         color: #1e3a8a !important;
+    }
+
+    /* ── Wing / shop selector (orange theme) ── */
+    [data-testid="stColumn"]:has(#wing-picker-marker) [data-testid="stSelectbox"] label p {
+        color: #9A3412 !important;
+    }
+    [data-testid="stColumn"]:has(#wing-picker-marker) div[data-baseweb="select"] > div {
+        background: linear-gradient(135deg, #FFEDD5 0%, #FDBA74 50%, #FB923C 100%) !important;
+        border: 2px solid #C2410C !important;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.35), 0 0 0 3px rgba(249, 115, 22, 0.25) !important;
+    }
+    [data-testid="stColumn"]:has(#wing-picker-marker) div[data-baseweb="select"] > div > div {
+        color: #7C2D12 !important;
+    }
+    [data-testid="stColumn"]:has(#wing-picker-marker) div[data-baseweb="select"] svg {
+        color: #C2410C !important;
+        fill: #C2410C !important;
     }
 
     /* ── Streamlit metrics in tabs ── */
@@ -426,22 +687,35 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+GITHUB_EXCEL_URL = (
+    "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/"
+    "Zen_Estate_Combined_Expenses_Q1.xlsx"
+)
+
+
+def _fetch_main_excel_bytes():
+    """Prefer local workbook beside app.py; fall back to GitHub."""
+    from io import BytesIO
+    from pathlib import Path
+
+    import requests
+
+    local_path = Path(__file__).resolve().parent / "Zen_Estate_Combined_Expenses_Q1.xlsx"
+    if local_path.is_file():
+        return local_path.read_bytes()
+
+    response = requests.get(GITHUB_EXCEL_URL, timeout=30)
+    response.raise_for_status()
+    return response.content
+
+
 @st.cache_data(show_spinner=False)
 def load_excel_from_github():
-    """Load Excel file directly from GitHub repository"""
-    # GitHub raw file URL - UPDATE THIS with your actual file URL
-    GITHUB_EXCEL_URL = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
-    
+    """Load Excel file from local copy or GitHub repository"""
     try:
-        import requests
         from io import BytesIO
-        
-        # Download the file
-        response = requests.get(GITHUB_EXCEL_URL)
-        response.raise_for_status()
-        
-        # Load into pandas
-        excel_file = BytesIO(response.content)
+
+        excel_file = BytesIO(_fetch_main_excel_bytes())
         return load_excel_data(excel_file)
     except Exception as e:
         st.error(f"Error loading data from GitHub: {e}")
@@ -590,28 +864,61 @@ def load_petty_cash_data(cache_bust=0):
         return {}
 
 
+def _parse_august_leela_from_sheet1(df):
+    """August 2026 Leela fund items in Sheet1 cols X–AD (23–29), rows 203 & 205."""
+    items = []
+    names_row, amounts_row = 202, 204
+    if df.shape[0] <= amounts_row:
+        return items
+    for col in range(23, 30):
+        if col >= df.shape[1]:
+            continue
+        desc = df.iloc[names_row, col]
+        amt = df.iloc[amounts_row, col]
+        if pd.notna(desc) and isinstance(desc, str) and desc.strip():
+            if pd.notna(amt) and isinstance(amt, (int, float)) and amt > 0:
+                items.append({
+                    'Description': desc.strip(),
+                    'Amount': float(amt),
+                })
+    return items
+
+
 @st.cache_data(show_spinner=False)
 def load_leela_data():
     """Load Leela Fund expenditure data from Sheet5 (col C=description, col D=amount)."""
     try:
-        import requests, io
-        url = "https://raw.githubusercontent.com/dhootmahesh28/zen-estate-dashboard/master/Zen_Estate_Combined_Expenses_Q1.xlsx"
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        df = pd.read_excel(io.BytesIO(response.content), sheet_name='Sheet5', header=None)
-        
+        import io
+
+        content = _fetch_main_excel_bytes()
+        df_sheet5 = pd.read_excel(io.BytesIO(content), sheet_name='Sheet5', header=None)
+        df_sheet1 = pd.read_excel(io.BytesIO(content), sheet_name='Sheet1', header=None)
+
         items = []
-        for row in range(df.shape[0]):
+        seen = set()
+        for row in range(df_sheet5.shape[0]):
             # Description in col C (index 2), Amount in col D (index 3)
-            desc = df.iloc[row, 2] if df.shape[1] > 2 else None
-            amt  = df.iloc[row, 3] if df.shape[1] > 3 else None
+            desc = df_sheet5.iloc[row, 2] if df_sheet5.shape[1] > 2 else None
+            amt = df_sheet5.iloc[row, 3] if df_sheet5.shape[1] > 3 else None
             if pd.notna(desc) and isinstance(desc, str) and desc.strip():
+                desc_clean = desc.strip()
+                key = desc_clean.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
                 items.append({
-                    'Description': desc.strip(),
+                    'Description': desc_clean,
                     'Amount': float(amt) if pd.notna(amt) and isinstance(amt, (int, float)) else None
                 })
+
+        for item in _parse_august_leela_from_sheet1(df_sheet1):
+            key = item['Description'].lower()
+            if key not in seen:
+                seen.add(key)
+                items.append(item)
+
         return pd.DataFrame(items)
-    except Exception as e:
+    except Exception:
         return pd.DataFrame()
 
 @st.cache_data(show_spinner=False)
@@ -637,7 +944,8 @@ def load_excel_data(file):
             {'name': 'Apr', 'to_be_row': 128, 'received_row': 127, 'diff_row': 129, 'summary_row': 133, 'expense_col': 15},
             {'name': 'May', 'to_be_row': 147, 'received_row': 146, 'diff_row': 148, 'summary_row': 152, 'expense_col': 15},
             {'name': 'Jun', 'to_be_row': 166, 'received_row': 165, 'diff_row': 167, 'summary_row': 171, 'expense_col': 15},
-            {'name': 'Jul', 'to_be_row': 182, 'received_row': 181, 'diff_row': 183, 'summary_row': 187, 'expense_col': 15}
+            {'name': 'Jul', 'to_be_row': 182, 'received_row': 181, 'diff_row': 183, 'summary_row': 187, 'expense_col': 15},
+            {'name': 'Aug', 'to_be_row': 200, 'received_row': 199, 'diff_row': 201, 'summary_row': 205, 'expense_col': 15}
         ]
         
         # Monthly summary data
@@ -657,7 +965,7 @@ def load_excel_data(file):
             # Compute Extra Income from breakdown row (sum cols 23-28) to match breakdown table
             breakdown_row_map = {
                 'Sep': 8, 'Oct': 28, 'Nov': 44, 'Dec': 61, 'Jan': 76,
-                'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181
+                'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181, 'Aug': 199
             }
             br = breakdown_row_map.get(month, month_info['summary_row'])
             extra_income = sum(
@@ -706,7 +1014,10 @@ def load_excel_data(file):
             {'month': 'Feb', 'start': 88, 'end': 102},   # Feb vendor rows
             {'month': 'Mar', 'start': 104, 'end': 118},  # Mar vendor rows
             {'month': 'Apr', 'start': 121, 'end': 133},
-            {'month': 'May', 'start': 139, 'end': 152}    # May vendor rows
+            {'month': 'May', 'start': 139, 'end': 152},
+            {'month': 'Jun', 'start': 159, 'end': 173},
+            {'month': 'Jul', 'start': 175, 'end': 191},
+            {'month': 'Aug', 'start': 193, 'end': 209},
         ]
         
         for section in vendor_sections:
@@ -744,7 +1055,8 @@ def load_excel_data(file):
             'Apr': 127,  # Total row for Apr
             'May': 146,  # Total row for May
             'Jun': 165,  # Total row for Jun
-            'Jul': 181   # Total row for Jul
+            'Jul': 181,  # Total row for Jul
+            'Aug': 199,  # Total row for Aug
         }
         
         for month, row_idx in month_rows.items():
@@ -793,7 +1105,8 @@ def load_excel_data(file):
             {'month': 'Apr', 'vendor_row': 120},
             {'month': 'May', 'vendor_row': 138},
             {'month': 'Jun', 'vendor_row': 157},
-            {'month': 'Jul', 'vendor_row': 173}
+            {'month': 'Jul', 'vendor_row': 173},
+            {'month': 'Aug', 'vendor_row': 191},
         ]
         
         fine_data = {}  # keyed by (month, wing)
@@ -866,7 +1179,7 @@ def create_vendor_breakdown(df_vendors, month):
     ))
     
     # Set the year based on month
-    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"] else "2025"
+    year = "2026" if month in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"] else "2025"
     
     fig.update_layout(
         title=f'Vendor Expense Breakdown ({month} {year})',
@@ -1019,7 +1332,7 @@ HEADER_COLORS = {
 
 MONTH_COLORS = {
     'Sep': '#cce5ff', 'Oct': '#ffe5cc', 'Nov': '#d9ccff', 'Dec': '#fff0b3',
-    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff', 'Jun': '#ffd6cc', 'Jul': '#ccf5ff',
+    'Jan': '#ffccdd', 'Feb': '#b3f0e0', 'Mar': '#fff3b3', 'Apr': '#ccf0cc', 'May': '#f0ccff', 'Jun': '#ffd6cc', 'Jul': '#ccf5ff', 'Aug': '#e9d5ff',
 }
 
 def render_html_table(df, fmt=None):
@@ -1242,7 +1555,7 @@ def render_petty_cash(petty_data, fy_start):
         "Sep 2025": "#cce5ff", "Oct 2025": "#ffe5cc", "Nov 2025": "#d9ccff",
         "Dec 2025": "#fff0b3", "Jan 2026": "#ffccdd", "Feb 2026": "#b3f0e0",
         "Mar 2026": "#fff3b3", "Apr 2026": "#ccf0cc", "May 2026": "#f0ccff",
-        "Jun 2026": "#ffd6cc", "Jul 2026": "#ccf5ff",
+        "Jun 2026": "#ffd6cc", "Jul 2026": "#ccf5ff", "Aug 2026": "#e9d5ff",
     }
     bg = month_colors.get(selected_m, "#ffffff")
 
@@ -1387,13 +1700,12 @@ def main():
     df_fines = filter_df_by_fy(df_fines_all, selected_fy)
     petty_data = filter_petty_by_fy(petty_by_fy, selected_fy)
 
-    tab_overview, tab_leela, tab_petty, tab_extra, tab_wings, tab_downloads = st.tabs([
+    tab_overview, tab_leela, tab_petty, tab_extra, tab_wings = st.tabs([
         "📊 Overview",
         "🏦 Leela Fund",
         "💵 Petty Cash",
         "💰 Extra Income",
         "🏢 Wings & Shops",
-        "📥 Downloads",
     ])
 
     with tab_overview:
@@ -1457,7 +1769,7 @@ def main():
             # Build HTML table manually to support fine detail tags
             month_colors = {
                 'Sep':'#cce5ff','Oct':'#ffe5cc','Nov':'#d9ccff','Dec':'#fff0b3',
-                'Jan':'#ffccdd','Feb':'#b3f0e0','Mar':'#fff3b3','Apr':'#ccf0cc','May':'#f0ccff'
+                'Jan':'#ffccdd','Feb':'#b3f0e0','Mar':'#fff3b3','Apr':'#ccf0cc','May':'#f0ccff','Jun':'#ffd6cc','Jul':'#ccf5ff','Aug':'#e9d5ff'
             }
             header_cols = {
                 'Month':       '#555555',
@@ -1577,12 +1889,15 @@ def main():
                 col1, col2 = st.columns([1, 3])
 
                 with col1:
+                    st.markdown('<span id="wing-picker-marker"></span>', unsafe_allow_html=True)
                     selected_wing_shop = st.selectbox(
                         'Select a Wing/Shop:', all_wings_shops, key=f'wing_shop_filter_{selected_fy}'
                     )
 
                 with col2:
-                    st.write("")
+                    render_payment_reminder_controls(
+                        df_wings, df_fines, selected_fy_label, selected_fy
+                    )
 
                 wing_shop_data = df_wings[df_wings['Wing'] == selected_wing_shop].copy()
 
@@ -1622,7 +1937,7 @@ def main():
                     if 'Wing' in wing_shop_display.columns:
                         wing_shop_display = wing_shop_display.drop('Wing', axis=1)
                     month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6,
-                                   'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
+                                   'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11, 'Aug': 12}
                     wing_shop_display['month_sort'] = wing_shop_display['Month'].map(month_order)
                     wing_shop_display = wing_shop_display.sort_values('month_sort').drop('month_sort', axis=1)
                     wing_shop_display = wing_shop_display.rename(columns={
@@ -1701,7 +2016,7 @@ def main():
                 detailed_breakdown['Fine_Amount'] = 0
 
             month_order = {'Sep': 1, 'Oct': 2, 'Nov': 3, 'Dec': 4, 'Jan': 5, 'Feb': 6,
-                           'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11}
+                           'Mar': 7, 'Apr': 8, 'May': 9, 'Jun': 10, 'Jul': 11, 'Aug': 12}
             detailed_breakdown['Month_Sort'] = detailed_breakdown['Month'].map(month_order)
             detailed_breakdown = detailed_breakdown.sort_values(['Month_Sort', 'Wing']).drop('Month_Sort', axis=1)
             detailed_breakdown = detailed_breakdown.reset_index(drop=True)
@@ -1713,46 +2028,6 @@ def main():
                 detailed_breakdown[['Wing', 'Month', 'To Be Received', 'Actual Received', 'Fine_Details', 'Difference']],
                 fmt={'To Be Received':'₹{:,.2f}', 'Actual Received':'₹{:,.2f}', 'Difference':'₹{:,.2f}'}
             )
-            
-    with tab_downloads:
-        st.markdown("### 📥 Download Reports")
-        if df_monthly.empty and df_wings.empty:
-            st.info(f"No CSV reports available for **{selected_fy_label}**.")
-        else:
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                if not df_monthly.empty:
-                    csv_monthly = df_monthly.to_csv(index=False)
-                    st.download_button(
-                        "📊 Monthly Summary (CSV)",
-                        csv_monthly,
-                        f"monthly_summary_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        key="dl_monthly",
-                    )
-
-            with col2:
-                if not df_wings.empty:
-                    csv_wings = df_wings.to_csv(index=False)
-                    st.download_button(
-                        "🏘️ Wing Data (CSV)",
-                        csv_wings,
-                        f"wing_data_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        key="dl_wings",
-                    )
-
-            with col3:
-                if not df_vendors.empty:
-                    csv_vendors = df_vendors.to_csv(index=False)
-                    st.download_button(
-                        "💼 Vendor Data (CSV)",
-                        csv_vendors,
-                        f"vendor_data_{selected_fy}_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        key="dl_vendors",
-                    )
 
     if df_monthly_all.empty and not petty_by_fy:
         st.error("❌ Unable to load data from repository")
