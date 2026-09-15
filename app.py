@@ -1,4 +1,15 @@
 import streamlit as st
+from auth import authentication_ui
+
+st.set_page_config(
+    page_title="Zen Estate Financial Dashboard",
+    page_icon="🏢",
+    layout="wide"
+)
+
+if not authentication_ui():
+    st.stop()
+
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
@@ -373,11 +384,6 @@ def get_available_financial_years(petty_by_fy, df_monthly):
         fys.add(DEFAULT_MAIN_FY_START)
     return sorted(fys, reverse=True)
 
-st.set_page_config(
-    page_title="Zen Estate Financial Dashboard",
-    page_icon="🏢",
-    layout="wide"
-)
 
 st.markdown("""
     <style>
