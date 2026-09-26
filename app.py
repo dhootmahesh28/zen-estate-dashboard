@@ -1650,7 +1650,15 @@ def main():
     available_fys = get_available_financial_years(petty_by_fy, df_monthly_all)
     fy_options = {fy_label(fy): fy for fy in available_fys}
     fy_labels = list(fy_options.keys())
-    latest_fy_label = fy_labels[0] if fy_labels else fy_label(DEFAULT_MAIN_FY_START)
+    # Default to the fixed baseline FY (Sep 2025 - Aug 2026), not just "whichever FY
+    # is newest" - a stray/incomplete row elsewhere in the sheet can otherwise cause
+    # a later, empty FY (e.g. Sep 2026 - Aug 2027) to appear first in the list and
+    # be selected by default even though it has no real data yet.
+    default_fy_label = fy_label(DEFAULT_MAIN_FY_START)
+    latest_fy_label = (
+        default_fy_label if default_fy_label in fy_options
+        else (fy_labels[0] if fy_labels else default_fy_label)
+    )
 
     header_fy_label = st.session_state.get("fy_selector", latest_fy_label)
     if header_fy_label not in fy_options:
@@ -1672,7 +1680,7 @@ def main():
         default_index = (
             fy_labels.index(st.session_state["fy_selector"])
             if st.session_state.get("fy_selector") in fy_labels
-            else 0
+            else (fy_labels.index(latest_fy_label) if latest_fy_label in fy_labels else 0)
         )
         selected_fy_label = st.selectbox(
             "Financial Year:",
