@@ -880,35 +880,21 @@ def load_petty_cash_data(cache_bust=0):
         return {}
 
 
-def _parse_august_leela_from_sheet1(df):
-    """August 2026 Leela fund items in Sheet1 cols X–AD (23–29), rows 203 & 205."""
-    items = []
-    names_row, amounts_row = 202, 204
-    if df.shape[0] <= amounts_row:
-        return items
-    for col in range(23, 30):
-        if col >= df.shape[1]:
-            continue
-        desc = df.iloc[names_row, col]
-        amt = df.iloc[amounts_row, col]
-        if pd.notna(desc) and isinstance(desc, str) and desc.strip():
-            if pd.notna(amt) and isinstance(amt, (int, float)) and amt > 0:
-                items.append({
-                    'Description': desc.strip(),
-                    'Amount': float(amt),
-                })
-    return items
-
-
 @st.cache_data(show_spinner=False)
 def load_leela_data():
-    """Load Leela Fund expenditure data from Sheet5 (col C=description, col D=amount)."""
+    """Load Leela Fund expenditure data strictly from Sheet5 (col C=description, col D=amount).
+
+    Previously this also merged in extra items scraped from Sheet1 (rows 203/205,
+    cols X-AD) via _parse_august_leela_from_sheet1(). That merge injected items
+    such as "FD" that do not actually appear in Sheet5 and are not part of the
+    authoritative Leela Fund expenditure list, so it has been removed - Sheet5
+    is now the single source of truth for this table.
+    """
     try:
         import io
 
         content = _fetch_main_excel_bytes()
         df_sheet5 = pd.read_excel(io.BytesIO(content), sheet_name='Sheet5', header=None)
-        df_sheet1 = pd.read_excel(io.BytesIO(content), sheet_name='Sheet1', header=None)
 
         items = []
         seen = set()
@@ -926,12 +912,6 @@ def load_leela_data():
                     'Description': desc_clean,
                     'Amount': float(amt) if pd.notna(amt) and isinstance(amt, (int, float)) else None
                 })
-
-        for item in _parse_august_leela_from_sheet1(df_sheet1):
-            key = item['Description'].lower()
-            if key not in seen:
-                seen.add(key)
-                items.append(item)
 
         return pd.DataFrame(items)
     except Exception:
