@@ -318,6 +318,7 @@ PETTY_CASH_SHEETS = [
     ("June 2026", "Jun 2026"),
     ("July 2026", "Jul 2026"),
     ("AUGUST 26", "Aug 2026"),
+    ("SEPTEMBER 26", "Sep 2026"),
 ]
 
 
@@ -783,8 +784,23 @@ def _parse_petty_month_sheet(df):
         )
         date_val = row.iloc[1] if len(row) > 1 else ""
 
+        # Header row repeated inside the data area (some sheets, e.g. AUGUST 26,
+        # start their real transactions a row later than usual, which previously
+        # let the literal header row fall through and get counted as a phantom
+        # transaction with sr=1 / credit=debit=0).
+        if particulars == "Sr No" or whom == "To whom Paid" or particulars == "Particulars":
+            continue
+
+        # Opening/Closing Balance cells store a single signed figure in whichever
+        # of Credit/Debit is populated (it is NOT a plain positive debit that
+        # needs negating - some sheets store it as an already-negative number
+        # directly in the Debit column). Take whichever column actually has a
+        # value, unmodified, rather than assuming Debit always means "subtract".
+        credit_is_set = len(row) > 5 and pd.notna(row.iloc[5]) and isinstance(row.iloc[5], (int, float))
+        debit_is_set = len(row) > 6 and pd.notna(row.iloc[6]) and isinstance(row.iloc[6], (int, float))
+
         if whom == "Opening Balance":
-            opening = credit if credit != 0 else (-debit if debit > 0 else debit)
+            opening = credit if credit_is_set else debit
             continue
 
         if particulars == "Total" or whom == "Total":
