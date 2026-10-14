@@ -704,6 +704,9 @@ def _fetch_main_excel_bytes():
     local_path = Path(__file__).resolve().parent / "Zen_Estate_Combined_Expenses_Q1.xlsx"
     if local_path.is_file():
         return local_path.read_bytes()
+    alternate_path = local_path.with_name("Zen_Estate_Combined_Expenses_Q1(2).xlsx")
+    if alternate_path.is_file():
+        return alternate_path.read_bytes()
 
     response = requests.get(GITHUB_EXCEL_URL, timeout=30)
     response.raise_for_status()
@@ -951,7 +954,8 @@ def load_excel_data(file):
             {'name': 'May', 'to_be_row': 147, 'received_row': 146, 'diff_row': 148, 'summary_row': 152, 'expense_col': 15},
             {'name': 'Jun', 'to_be_row': 166, 'received_row': 165, 'diff_row': 167, 'summary_row': 171, 'expense_col': 15},
             {'name': 'Jul', 'to_be_row': 182, 'received_row': 181, 'diff_row': 183, 'summary_row': 187, 'expense_col': 15},
-            {'name': 'Aug', 'to_be_row': 200, 'received_row': 199, 'diff_row': 201, 'summary_row': 205, 'expense_col': 15}
+            {'name': 'Aug', 'to_be_row': 200, 'received_row': 199, 'diff_row': 201, 'summary_row': 205, 'expense_col': 15},
+            {'name': 'Sep', 'to_be_row': 216, 'received_row': 215, 'diff_row': 217, 'summary_row': 221, 'expense_col': 15, 'fy_start': 2026}
         ]
         
         # Monthly summary data
@@ -960,7 +964,7 @@ def load_excel_data(file):
         
         for month_info in months_info:
             month = month_info['name']
-            fy_start = DEFAULT_MAIN_FY_START
+            fy_start = month_info.get('fy_start', DEFAULT_MAIN_FY_START)
             cal_year = month_calendar_year(month, fy_start)
             
             # Get summary totals
@@ -973,7 +977,7 @@ def load_excel_data(file):
                 'Sep': 8, 'Oct': 28, 'Nov': 44, 'Dec': 61, 'Jan': 76,
                 'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181, 'Aug': 199
             }
-            br = breakdown_row_map.get(month, month_info['summary_row'])
+            br = 215 if fy_start == 2026 else breakdown_row_map.get(month, month_info['summary_row'])
             extra_income = sum(
                 float(df.iloc[br, c]) if pd.notna(df.iloc[br, c]) and isinstance(df.iloc[br, c], (int, float)) else 0
                 for c in [23, 24, 25, 26, 27, 28]
@@ -1024,6 +1028,7 @@ def load_excel_data(file):
             {'month': 'Jun', 'start': 159, 'end': 173},
             {'month': 'Jul', 'start': 175, 'end': 191},
             {'month': 'Aug', 'start': 193, 'end': 209},
+            {'month': 'Sep', 'start': 209, 'end': 225, 'fy_start': 2026},
         ]
         
         for section in vendor_sections:
@@ -1038,7 +1043,7 @@ def load_excel_data(file):
                             'Vendor': vendor_str,
                             'Amount': float(amount),
                             'Month': section['month'],
-                            'FY_Start': DEFAULT_MAIN_FY_START,
+                            'FY_Start': section.get('fy_start', DEFAULT_MAIN_FY_START),
                         })
         
         df_monthly = pd.DataFrame(monthly_data)
@@ -1065,7 +1070,9 @@ def load_excel_data(file):
             'Aug': 199,  # Total row for Aug
         }
         
-        for month, row_idx in month_rows.items():
+        month_rows_by_fy = [(month, row_idx, 2025) for month, row_idx in month_rows.items()]
+        month_rows_by_fy.append(('Sep', 215, 2026))
+        for month, row_idx, income_fy in month_rows_by_fy:
             if row_idx < len(df):
                 nbh = df.iloc[row_idx, 23] if pd.notna(df.iloc[row_idx, 23]) else 0
                 lift = df.iloc[row_idx, 24] if pd.notna(df.iloc[row_idx, 24]) else 0
@@ -1076,7 +1083,7 @@ def load_excel_data(file):
                 
                 extra_income_breakdown.append({
                     'Month': month,
-                    'FY_Start': DEFAULT_MAIN_FY_START,
+                    'FY_Start': income_fy,
                     'NBH': float(nbh) if isinstance(nbh, (int, float)) else 0,
                     'Lift': float(lift) if isinstance(lift, (int, float)) else 0,
                     'Event': float(event) if isinstance(event, (int, float)) else 0,
@@ -1113,6 +1120,7 @@ def load_excel_data(file):
             {'month': 'Jun', 'vendor_row': 157},
             {'month': 'Jul', 'vendor_row': 173},
             {'month': 'Aug', 'vendor_row': 191},
+            {'month': 'Sep', 'vendor_row': 207, 'fy_start': 2026},
         ]
         
         fine_data = {}  # keyed by (month, wing)
@@ -1132,10 +1140,10 @@ def load_excel_data(file):
                     val = df.iloc[row_idx, col]
                     amount = float(val) if pd.notna(val) and isinstance(val, (int, float)) and val != 0 else 0
                     if amount != 0:
-                        key = (month, wing)
+                        key = (section.get('fy_start', DEFAULT_MAIN_FY_START), month, wing)
                         if key not in fine_data:
                             fine_data[key] = {
-                                'Month': month, 'Wing': wing, 'FY_Start': DEFAULT_MAIN_FY_START,
+                                'Month': month, 'Wing': wing, 'FY_Start': section.get('fy_start', DEFAULT_MAIN_FY_START),
                                 'HK': 0, 'Quinteze': 0, 'Security': 0, 'STP': 0,
                             }
                         fine_data[key][vendor] += amount
