@@ -846,34 +846,44 @@ def _parse_petty_month_sheet(df):
 
 @st.cache_data(show_spinner=False, ttl=300)
 def load_petty_cash_data(cache_bust=0):
-    """Load petty cash monthly sheets (Sep 2025 – Jul 2026), grouped by financial year."""
+    """Load available petty cash monthly sheets, including September 2026, by financial year."""
     try:
         import io
         import requests
 
-        url = PETTY_CASH_URL
-        if cache_bust:
-            url = f"{PETTY_CASH_URL}?v={cache_bust}"
-
-        response = requests.get(
-            url,
-            timeout=30,
-            headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-        )
-        response.raise_for_status()
-        xl = pd.ExcelFile(io.BytesIO(response.content))
+        from pathlib import Path
+        local_path = Path(__file__).resolve().parent / "Petty_Cash_Expense_Details.xlsx"
+        if local_path.is_file():
+            workbook_bytes = local_path.read_bytes()
+        else:
+            url = PETTY_CASH_URL
+            if cache_bust:
+                url = f"{PETTY_CASH_URL}?v={cache_bust}"
+            response = requests.get(
+                url, timeout=30,
+                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+            )
+            response.raise_for_status()
+            workbook_bytes = response.content
+        xl = pd.ExcelFile(io.BytesIO(workbook_bytes))
 
         petty_by_fy = {}
         abbr_to_num = {v: k for k, v in MONTH_NUM_TO_ABBR.items()}
 
-        for sheet_name, label in PETTY_CASH_SHEETS:
-            if sheet_name not in xl.sheet_names:
+        # Detect monthly sheets by their names, including "SEPTEMBER 26", "Sep 2026", etc.
+        # Avoid double-counting if a workbook contains multiple aliases for a month.
+        for sheet_name in xl.sheet_names:
+            if sheet_name.strip().lower() in PETTY_SKIP_SHEETS:
                 continue
-            month_abbr, year_str = label.split()
+            parsed_name = parse_petty_sheet_name(sheet_name)
+            if parsed_name is None:
+                continue
+            month_abbr, year, label = parsed_name
+            year_str = str(year)
             fy_start = get_fy_start(abbr_to_num[month_abbr], int(year_str))
             df = xl.parse(sheet_name, header=None)
             parsed_sheet = _parse_petty_month_sheet(df)
-            petty_by_fy.setdefault(fy_start, {})[label] = parsed_sheet
+            petty_by_fy.setdefault(fy_start, {}).setdefault(label, parsed_sheet)
 
         return petty_by_fy
     except Exception:
@@ -1552,6 +1562,7 @@ def render_petty_cash(petty_data, fy_start):
         "Dec 2025": "#fff0b3", "Jan 2026": "#ffccdd", "Feb 2026": "#b3f0e0",
         "Mar 2026": "#fff3b3", "Apr 2026": "#ccf0cc", "May 2026": "#f0ccff",
         "Jun 2026": "#ffd6cc", "Jul 2026": "#ccf5ff", "Aug 2026": "#e9d5ff",
+        "Sep 2026": "#cce5ff",
     }
     bg = month_colors.get(selected_m, "#ffffff")
 
@@ -1650,14 +1661,13 @@ def main():
     available_fys = get_available_financial_years(petty_by_fy, df_monthly_all)
     fy_options = {fy_label(fy): fy for fy in available_fys}
     fy_labels = list(fy_options.keys())
-    # Default to the fixed baseline FY (Sep 2025 - Aug 2026), not just "whichever FY
-    # is newest" - a stray/incomplete row elsewhere in the sheet can otherwise cause
-    # a later, empty FY (e.g. Sep 2026 - Aug 2027) to appear first in the list and
-    # be selected by default even though it has no real data yet.
-    default_fy_label = fy_label(DEFAULT_MAIN_FY_START)
+    # Prefer FY 2026-27 when its September 2026 petty cash sheet is present.
+    # Keep the previous FY as the fallback when that sheet is not available.
+    preferred_fy = 2026 if "Sep 2026" in petty_by_fy.get(2026, {}) else DEFAULT_MAIN_FY_START
+    default_fy_label = fy_label(preferred_fy)
     latest_fy_label = (
         default_fy_label if default_fy_label in fy_options
-        else (fy_labels[0] if fy_labels else default_fy_label)
+        else (fy_labels[0] if fy_labels else fy_label(DEFAULT_MAIN_FY_START))
     )
 
     header_fy_label = st.session_state.get("fy_selector", latest_fy_label)
@@ -1845,7 +1855,7 @@ def main():
                 st.rerun()
         with info_col:
             st.caption(
-                "Petty cash loads from GitHub (`Petty_Cash_Expense_Details.xlsx`). "
+                "Petty cash loads from a local workbook if present, otherwise GitHub (`Petty_Cash_Expense_Details.xlsx`). "
                 "After updating the file on GitHub, click **Refresh** here — "
                 "the dashboard does not auto-detect Excel changes."
             )
