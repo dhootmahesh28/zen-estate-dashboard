@@ -1116,11 +1116,16 @@ def load_excel_data(file):
             {'month': 'Feb', 'vendor_row': 87},
             {'month': 'Mar', 'vendor_row': 103},
             {'month': 'Apr', 'vendor_row': 120},
-            {'month': 'May', 'vendor_row': 138},
-            {'month': 'Jun', 'vendor_row': 157},
-            {'month': 'Jul', 'vendor_row': 173},
-            {'month': 'Aug', 'vendor_row': 191},
-            {'month': 'Sep', 'vendor_row': 207, 'fy_start': 2026},
+            # NOTE: 'vendor_row' must be the row whose column AE (index 30) says
+            # "Vendors" - NOT the "Fine" title row above it. HK/Quinteze/Security/STP
+            # are the four rows directly below it. (May-Aug and Sep 2026 previously
+            # pointed one row too high, which shifted every fine down one vendor,
+            # e.g. a Security fine showed up as STP.)
+            {'month': 'May', 'vendor_row': 139},
+            {'month': 'Jun', 'vendor_row': 158},
+            {'month': 'Jul', 'vendor_row': 174},
+            {'month': 'Aug', 'vendor_row': 192},
+            {'month': 'Sep', 'vendor_row': 208, 'fy_start': 2026},
         ]
         
         fine_data = {}  # keyed by (month, wing)
