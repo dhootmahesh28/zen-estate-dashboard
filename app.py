@@ -955,7 +955,8 @@ def load_excel_data(file):
             {'name': 'Jun', 'to_be_row': 166, 'received_row': 165, 'diff_row': 167, 'summary_row': 171, 'expense_col': 15},
             {'name': 'Jul', 'to_be_row': 182, 'received_row': 181, 'diff_row': 183, 'summary_row': 187, 'expense_col': 15},
             {'name': 'Aug', 'to_be_row': 200, 'received_row': 199, 'diff_row': 201, 'summary_row': 205, 'expense_col': 15},
-            {'name': 'Sep', 'to_be_row': 216, 'received_row': 215, 'diff_row': 217, 'summary_row': 221, 'expense_col': 15, 'fy_start': 2026}
+            {'name': 'Sep', 'to_be_row': 216, 'received_row': 215, 'diff_row': 217, 'summary_row': 221, 'expense_col': 15, 'fy_start': 2026, 'breakdown_row': 215},
+            {'name': 'Oct', 'to_be_row': 233, 'received_row': 232, 'diff_row': 234, 'summary_row': 238, 'expense_col': 15, 'fy_start': 2026, 'breakdown_row': 232},
         ]
         
         # Monthly summary data
@@ -977,7 +978,7 @@ def load_excel_data(file):
                 'Sep': 8, 'Oct': 28, 'Nov': 44, 'Dec': 61, 'Jan': 76,
                 'Feb': 94, 'Mar': 110, 'Apr': 127, 'May': 146, 'Jun': 165, 'Jul': 181, 'Aug': 199
             }
-            br = 215 if fy_start == 2026 else breakdown_row_map.get(month, month_info['summary_row'])
+            br = month_info.get('breakdown_row', breakdown_row_map.get(month, month_info['summary_row']))
             extra_income = sum(
                 float(df.iloc[br, c]) if pd.notna(df.iloc[br, c]) and isinstance(df.iloc[br, c], (int, float)) else 0
                 for c in [23, 24, 25, 26, 27, 28]
@@ -1028,7 +1029,8 @@ def load_excel_data(file):
             {'month': 'Jun', 'start': 159, 'end': 173},
             {'month': 'Jul', 'start': 175, 'end': 191},
             {'month': 'Aug', 'start': 193, 'end': 209},
-            {'month': 'Sep', 'start': 209, 'end': 225, 'fy_start': 2026},
+            {'month': 'Sep', 'start': 209, 'end': 224, 'fy_start': 2026},
+            {'month': 'Oct', 'start': 226, 'end': 242, 'fy_start': 2026},
         ]
         
         for section in vendor_sections:
@@ -1072,6 +1074,7 @@ def load_excel_data(file):
         
         month_rows_by_fy = [(month, row_idx, 2025) for month, row_idx in month_rows.items()]
         month_rows_by_fy.append(('Sep', 215, 2026))
+        month_rows_by_fy.append(('Oct', 232, 2026))
         for month, row_idx, income_fy in month_rows_by_fy:
             if row_idx < len(df):
                 nbh = df.iloc[row_idx, 23] if pd.notna(df.iloc[row_idx, 23]) else 0
@@ -1126,6 +1129,7 @@ def load_excel_data(file):
             {'month': 'Jul', 'vendor_row': 174},
             {'month': 'Aug', 'vendor_row': 192},
             {'month': 'Sep', 'vendor_row': 208, 'fy_start': 2026},
+            {'month': 'Oct', 'vendor_row': 225, 'fy_start': 2026},
         ]
         
         fine_data = {}  # keyed by (month, wing)
